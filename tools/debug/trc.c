@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
-// ptrace a running process tree; keep the last 60 syscalls per pid and dump them to /dev/kmsg when a pid gets SIGABRT/SIGSEGV
+// build: python -m ziglang cc -target aarch64-linux-musl -static -O1 trc.c -o trc; run on the tablet as root: trc <pid of zygote_next>
+// ptrace a running process tree; keep the last 60 syscalls per pid and dump them to /data/local/tmp/trc.log when a pid gets SIGABRT/SIGSEGV
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
