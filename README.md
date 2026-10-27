@@ -2,7 +2,7 @@
 
 Google's Android 17 GSI (`aosp_arm64`, build DP11.261002.005) running on the Lenovo Tab M10 FHD Plus (TB-X606V, MT8768), with the stock
 Android 10 vendor image and the stock 4.9.190 kernel. It boots to a working UI. Wi-Fi, camera, brightness and the keyboard work, and
-Settings opens in under a second once the apps are compiled. Bluetooth and audio output do not work yet.
+Settings opens in under a second once the apps are compiled. Audio output does not work yet.
 
 This repository holds the patches, helper tools and notes. It is not a turnkey build: most of the fixes were applied to a live system
 over adb and TWRP, and `build/build_image17.py` only reproduces the early part of that (see "Using this").
@@ -23,7 +23,7 @@ Companion repositories:
 | Brightness | works, through a Java AIDL lights shim (`tools/lights`) |
 | Keyboard (AOSP LatinIME) | works |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
-| Bluetooth | not working: the stack gets through HCI init after two patches, but turning it on is not verified |
+| Bluetooth | turns on, stays up, finds nearby devices; pairing and audio profiles not tried |
 | Audio output | not working: `audioserver` is stable but has no outputs (the HAL is 5.0, Android 17 expects newer) |
 | Mobile data and telephony | not tried |
 
