@@ -158,6 +158,11 @@ bp += ("\n# Bluetooth profiles (what AOSP's bluetooth.mk sets; a GSI without it 
        'bluetooth.profile.bas.client.enabled=true\nbluetooth.profile.opp.enabled=true\nbluetooth.profile.pan.nap.enabled=true\nbluetooth.profile.pan.panu.enabled=true\n'
        'bluetooth.profile.asha.central.enabled=true\n')
 replace(S, '/system/build.prop', tmpf('build.prop', bp))
+# the tablet reports its real identity (the GSI says "AOSP on ARM64"): streaming apps pick their quality tier by model, and Netflix only offered SD to the generic one
+pb = cat(S, '/system/product/etc/build.prop').decode()
+for k, v in (('brand', 'Lenovo'), ('device', 'achilles6_row_call'), ('manufacturer', 'LENOVO'), ('model', 'Lenovo TB-X606V'), ('name', 'full_achilles6_row_call')):
+    pb, n = re.subn(r'(?m)^ro\.product\.product\.%s=.*$' % k, 'ro.product.product.%s=%s' % (k, v), pb); assert n == 1, k
+replace(S, '/system/product/etc/build.prop', tmpf('product.build.prop', pb))
 
 # 3 patched libraries --------------------------------------------------------------------------------------------------
 print('3 libc, linkers, libui, ...')
