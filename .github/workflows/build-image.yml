@@ -1,0 +1,130 @@
+name: Build image
+
+# Builds the patched Android 17 system images (gapps and nogapps) for the Lenovo TB-X606V from public inputs and optionally publishes them as a release.
+# Not included (proprietary or tablet-specific): Dolby Atmos, the vendor edits (tools/scripts/apply_vendor_a17.sh) and compiled app code (needs a booted tablet).
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a GitHub release with the images
+        type: boolean
+        default: false
+      tag:
+        description: Release tag (used when publishing)
+        default: v17-dp11-ci
+  push:
+    tags: ['a17-v*']
+
+env:
+  GSI_URL: https://dl.google.com/developers/android/cinnamonbun/images/gsi/aosp_arm64-exp-DP11.261002.005-16594701-a359a50b.zip
+  GSI_IMG_SHA256: e771161b08b7d62614bc067b17861587532ae94de79b85a0e9a0afa381b07b85          # system.img inside that zip
+  DONOR_URL: https://sourceforge.net/projects/misterztr-gsi/files/LineageOS/Android%2016/LineageOS-23.2-20260524-GAPPS-EXT4-GSI.7z/download
+  DONOR_7Z_SHA256: 22b3c069445cc3d54819361a1636f7b27ff455dc547f300b868cecddb1b2e22d
+  DONOR_IMG: LineageOS-23.2-20260524-GAPPS-EXT4-GSI.img
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Android 16 port repo (ROM Tuner, boot animations)
+        uses: actions/checkout@v7
+        with:
+          repository: manvindar/tb-x606v-android16-port
+          path: port
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
+          df -h /
+
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+
+      - uses: mlugg/setup-zig@v2
+        with: { version: 0.14.1 }
+
+      - uses: actions/setup-java@v6
+        with: { distribution: temurin, java-version: '17' }
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y e2fsprogs erofs-utils p7zip-full xz-utils zip unzip openssl
+          pip install capstone
+          sdkmanager "build-tools;35.0.0" "platforms;android-34"
+          debugfs -V; fsck.erofs --help 2>&1 | head -1; zig version
+
+      - name: Download Google's Android 17 GSI
+        run: |
+          curl -L --fail --retry 5 --retry-delay 10 -o gsi.zip "$GSI_URL"
+          unzip -o -q gsi.zip system.img && rm gsi.zip
+          echo "$GSI_IMG_SHA256  system.img" | sha256sum -c -
+
+      - name: Download the LineageOS 23.2 GSI (donor)
+        run: |
+          curl -L --fail --retry 5 --retry-delay 10 -o donor.7z "$DONOR_URL"
+          echo "$DONOR_7Z_SHA256  donor.7z" | sha256sum -c -
+          7z x -y donor.7z "$DONOR_IMG" && rm donor.7z
+          ls -la "$DONOR_IMG"
+
+      - name: Download MindTheGapps
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPO=MindTheGapps/16.0.0-arm64
+          TAG=$(gh release list -R $REPO --limit 1 --json tagName -q '.[0].tagName')
+          mkdir gapps && cd gapps && gh release download "$TAG" -R $REPO -p '*.zip' -p '*.sha256sum'
+          sha256sum -c *.sha256sum
+
+      - name: Build the images
+        run: |
+          python build/build_image17.py --gsi system.img --donor "$DONOR_IMG" --out system-a17-nogapps.img \
+            --gapps gapps/*.zip --out-gapps system-a17-gapps.img --port-repo port \
+            --build-tools "$ANDROID_HOME/build-tools/35.0.0"
+          rm system.img "$DONOR_IMG"
+          ls -la *.img
+
+      - name: Check the images
+        run: |
+          for f in system-a17-nogapps.img system-a17-gapps.img; do
+            [ "$(stat -c %s $f)" = 4085252096 ]
+            e2fsck -fn $f
+          done
+          debugfs -R 'ls -l /system/lib64/a16audio' system-a17-nogapps.img | wc -l
+          debugfs -R 'stat /system/product/priv-app/GmsCore/GmsCore.apk' system-a17-gapps.img | head -1
+
+      - name: Compress
+        run: |
+          xz -T0 -6 -c system-a17-gapps.img > system-a17-tb-x606v-gapps-nodexopt.img.xz
+          xz -T0 -6 -c system-a17-nogapps.img > system-a17-tb-x606v-nogapps-nodexopt.img.xz
+          rm system-a17-gapps.img system-a17-nogapps.img
+          sha256sum *.img.xz | tee SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: system-a17-tb-x606v
+          path: |
+            system-a17-tb-x606v-*.img.xz
+            SHA256SUMS.txt
+          retention-days: 14
+          compression-level: 0
+
+      - name: Publish release
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" system-a17-tb-x606v-*.img.xz SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" system-a17-tb-x606v-*.img.xz SHA256SUMS.txt --prerelease \
+              --title "Android 17 (DP11) for TB-X606V, built by GitHub Actions ($TAG)" --notes-file docs/RELEASE_NOTES_CI.md
+          fi
