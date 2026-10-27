@@ -25,6 +25,7 @@ Companion repositories:
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
 | Bluetooth | works: turns on, scans, pairs, and connects (HFP and A2DP with a Bose QC 45; the A2DP stream starts and stops with playback) |
 | Audio output | works through Android 16's `audioserver` and library closure run privately (`tools/audio`); a 440 Hz test tone plays, other apps not yet checked |
+| Google apps | install script works (Play Store runs) |
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
 | Cellular (calls, SMS, mobile data) | not working, see below |
 | USB file transfer | works (checked with libmtp); tethering untested |
@@ -63,6 +64,13 @@ Pairing worked but nothing could connect: the GSI sets none of the `bluetooth.pr
 except hearing aid and never connected A2DP or HFP after pairing (the remote simply hung up after SDP). `build/build_image17.py` now appends those properties to `build.prop` (a2dp source, avrcp target,
 hfp ag, hid host and device, gatt, bas client, opp, pan, asha, and a class of device). The `persist.sys.bt.unsupported.commands=182` property of the Android 16 / TrebleDroid workaround is also in
 `build.prop`; the AOSP Bluetooth stack ignores it, and the binary patch in `tools/bpf/patch_bluetooth.py` does that job.
+
+## Google apps
+
+`tools/scripts/install_gapps.sh` installs [MindTheGapps](https://github.com/MindTheGapps/16.0.0-arm64) (the Android 16 build) into the running system over adb: Play services, Play Store, Services Framework, the
+contact and calendar sync adapters and the permission, sysconfig and overlay files they need (about 290 MB; `--with-velvet`, `--with-speech` and `--with-wellbeing` add more). Setup Wizard is left out.
+Everything it writes is listed in `/system/etc/gapps-installed.txt`, and `--remove` deletes exactly that. Verified: the system boots with it, Play Store starts and shows the account. Play services crashes
+twice during the first boot with `Unexpected safety source: AdvancedProtection` (its Safety Center source is not in Android 17's config) and then stays up.
 
 ## Serial console warning
 
