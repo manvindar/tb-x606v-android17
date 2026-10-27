@@ -4,3 +4,4 @@
 *.apex
 *.capex
 logs/
+tools/lights/out/
