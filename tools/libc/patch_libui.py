@@ -16,4 +16,18 @@ else:
             hits.append(i + 2)
     for a in hits: d[a:a + 2] = b'\x00\xbf'
 assert len(hits) == 2, hits
+# Gralloc2 (HIDL mapper 2.x) rejects descriptors whose usage has bit 13 (0x2000, the legacy GRALLOC_USAGE_EXTERNAL_DISP) with "buffer descriptor contains invalid usage bits 0x2000".
+# The MediaTek OMX decoder asks for it, so ACodec's YV12 output buffers could not be allocated and YouTube showed a green screen / "problem while playing".
+# arm64 only (the 32-bit library is not used by the apps that decode video): in the two validate functions the invalid-bits mask is built with
+# `mov xN,#0x2400 ; ... movk xN,#0x28(8),lsl #16 ; movk xN,#0xffff,lsl #32`; drop bit 13 from it (0x2400 -> 0x0400).
+if d[4] == 2:
+    words = struct.unpack_from('<%dI' % (len(d) // 4), d, 0); fixed = []
+    for i, w in enumerate(words):
+        if w in (0xd2848009, 0xd284800a):                         # movz x9/x10,#0x2400
+            rd = w & 31
+            nxt = [words[j] for j in range(i + 1, min(i + 6, len(words)))]
+            if any((n & 0xffe0001f) == (0xf2a00000 | rd) and ((n >> 5) & 0xffff) in (0x28, 0x828, 0xe28) for n in nxt):   # movk xRd,#0x28|0x828|0xe28,lsl #16
+                struct.pack_into('<I', d, i * 4, 0xd2808000 | rd); fixed.append(i * 4)
+    assert len(fixed) == 3, [hex(f) for f in fixed]
+    print('usage mask fixed at', [hex(f) for f in fixed])
 open(sys.argv[2], 'wb').write(d); print('patched', [hex(h) for h in hits])

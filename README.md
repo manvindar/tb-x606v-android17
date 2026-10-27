@@ -36,6 +36,7 @@ Companion repositories:
 | Bluetooth | works: turns on, scans, pairs, and connects (HFP and A2DP with a Bose QC 45; the A2DP stream starts and stops with playback) |
 | Audio output | works through Android 16's `audioserver` and library closure run privately (`tools/audio`); a 440 Hz test tone plays, other apps not yet checked |
 | Google apps | install script works (Play Store runs) |
+| YouTube playback | works (hardware H.264; the vendor VP9 entry is removed); needed the `libui` usage-bit patch |
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
 | Cellular (calls, SMS, mobile data) | not working, see below |
 | USB file transfer | works (checked with libmtp); tethering untested |
@@ -67,6 +68,13 @@ The default is the Pixel 10 Gemini animation from [docbt/GeminiBootAnimation](ht
 `tools/boot-animation/make_gemini_fit.py` scales it to the 1200x1920 panel, centres it on black and reduces it to a 128-colour palette (13 MB, stored zip). Install it as
 `/system/product/media/bootanimation.zip`. Other candidates that were previewed: ArrowOS (the leftover from the Android 16 customisation), a generated galaxy, the Lineage original,
 and Pixel-style and Lenovo Yoga Smart Tab animations from the [Android Boot Animation Collection](https://github.com/tntapple219/Android-Boot-Animation-Collection) (unlicensed, not included).
+
+## Video playback (green screen)
+
+YouTube showed a green screen or "There was a problem while playing". The MediaTek OMX decoder asks for gralloc usage bit 13 (0x2000, the legacy `GRALLOC_USAGE_EXTERNAL_DISP`), and
+Android 17's `libui` Gralloc2 path rejects it ("buffer descriptor contains invalid usage bits 0x2000"), so ACodec could not allocate the YV12 output buffers
+(`dequeueBuffer failed: BAD_VALUE`). `tools/libc/patch_libui.py` now also drops bit 13 from the invalid-bits mask in the two validate functions (arm64). Replace the library with a new file and
+`mv` it, not `cat >`: overwriting the mapped file in place restarted the whole framework once.
 
 ## Bluetooth profiles
 
