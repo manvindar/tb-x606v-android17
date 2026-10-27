@@ -28,7 +28,7 @@ Companion repositories:
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
 | Cellular (calls, SMS, mobile data) | not working, see below |
 | USB file transfer | works (checked with libmtp); tethering untested |
-| DRM (Widevine) | not provisioned |
+| DRM (Widevine) | HAL found, RKPD provisioning fails; playback untested |
 
 First boot is slow until the apps are compiled. The GSI ships no odex, so every app runs from its APK. Run `tools/scripts/dexopt_all.sh`
 once (it takes a few minutes): Settings goes from about 50 s to under a second cold.
@@ -37,16 +37,18 @@ once (it takes a few minutes): Settings goes from about 50 s to under a second c
 
 From a read of the logs after a clean boot (no crashes, ANRs or service restarts):
 
-- **Cellular.** The phone process reports "out of service" with an unknown radio HAL version, and Settings throws `UnsupportedOperationException` for the IMEI. Android 17's telephony does not
-  accept the Android 10 vendor radio HAL (`mtkfusionrild`). Needs a SIM to confirm; fixing it is a project of its own.
+- **Cellular.** The phone process reports "out of service" with an unknown radio HAL version, and Settings throws `UnsupportedOperationException` for the IMEI. The vendor radio (`mtkfusionrild`)
+  only serves `android.hardware.radio@1.0/1.1` and `radio.config@1.0/1.1`, which Android 17's telephony does not accept (it wants a much newer HIDL version or AIDL). Making it work would need
+  a radio HAL translation layer; not attempted. Needs a SIM to confirm.
 - **USB.** `UsbDeviceManager` logs "usb gadget hidl hal service not found" (the vendor only has `android.hardware.usb@1.1`, port roles) and falls back to its legacy handler, which drives `sys.usb.config`.
   Checked: switching to file transfer works, and `libmtp` on the Mac lists the tablet's storage and folders. USB tethering is untested.
-- **Widevine** fails to provision (`ERROR_DRM_CANNOT_HANDLE`), so protected streaming will probably not play.
+- **Widevine.** The vendor DRM HAL (`drm@1.2`, widevine instance) is found by the framework. The new `RkpdWidevine` provisioning (remote key provisioning for Widevine) fails with `ERROR_DRM_CANNOT_HANDLE`
+  because the old HAL has no such property; the classic provisioning may still work. Protected playback is untested (it needs an app; a plain `app_process` test cannot open `MediaDrm`).
 - **Harmless noise.** fs-verity setup fails on every permissions write (the kernel has no verity), the GPU memory BPF map and `bpf_system_stats` ringbuf iterator are missing, and fingerprint, face and a
   few other managers are absent on this hardware. The Wi-Fi data-stall monitor logs "ignore this poll" constantly.
 - **Load average** sits around 25. It is MediaTek kernel threads in uninterruptible sleep, not CPU use (the cores are about 95% idle).
 - `dumpsys bluetooth_manager` crashes the Bluetooth process (`ControllerImpl::Dump`); debug only.
-- **A2DP.** The audio policy asks for an `a2dp` module that the 5.0 HAL does not have, so Bluetooth headphones are untested.
+- **A2DP.** The `bluetooth` audio module (BT audio HAL 2.0) loads, but the legacy `a2dp` module used for A2DP input does not exist in the 5.0 HAL ("could not load HW module a2dp"). Bluetooth headphones are untested.
 
 ## Boot animation
 
