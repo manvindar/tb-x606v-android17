@@ -13,7 +13,7 @@ Companion repositories:
 
 ## Images
 
-Prebuilt system images (a dump of the tested partition, with and without the Google apps) are attached to the Releases page, with install steps in `docs/RELEASE_NOTES.md`:
+Prebuilt system images (a dump of the tested partition, with and without the Google apps) are attached to the [first release](https://github.com/manvindar/tb-x606v-android17/releases/tag/v17-dp11-r1), with install steps in `docs/RELEASE_NOTES.md`:
 `tools/scripts/flash_a17.sh` flashes the image, `tools/scripts/apply_vendor_a17.sh` applies the vendor changes from TWRP once, `tools/scripts/dexopt_all.sh` makes it fast. The images contain Google's Android 17 GSI
 (and, in the gapps image, Google's apps); they carry Google's terms, not this repository's licence. Dolby Atmos (Lenovo and Dolby software) is not in them.
 
