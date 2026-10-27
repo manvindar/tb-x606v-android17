@@ -30,4 +30,6 @@ sh('umount /mnt/v')
 PY
 $ADB push $D/lights/vintf_light_aidl.xml /tmp/light.xml >/dev/null
 $ADB shell 'mount -t ext4 -o rw /dev/block/by-name/vendor /mnt/v2 2>/dev/null; mkdir -p /mnt/v2/etc/vintf/manifest; cat /tmp/light.xml > /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; chmod 644 /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; chcon u:object_r:vendor_configs_file:s0 /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; sync; umount /mnt/v2'
+# 7. audio_policy_configuration.xml without the deep_buffer output (Dolby's DAP effect sits on the primary output only; media plays on deep_buffer otherwise)
+$ADB shell 'mount -t ext4 -o rw /dev/block/by-name/vendor /mnt/v2 2>/dev/null; F=/mnt/v2/etc/audio_policy_configuration.xml; grep -q "name=\"deep_buffer\"" $F && { [ -f $F.orig-dolby ] || cat $F > $F.orig-dolby; awk "index(\$0, \"<mixPort name=\\\"deep_buffer\\\"\") { skip = 1 } !skip { print } skip && /<\\/mixPort>/ { skip = 0 }" $F.orig-dolby | sed "s/,deep_buffer//g" > /tmp/apc.new; cat /tmp/apc.new > $F; }; sync; umount /mnt/v2'
 echo "vendor ready"

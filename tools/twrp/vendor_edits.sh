@@ -48,6 +48,13 @@ apply_vendor_edits() {
   }
   strip_codec $V/etc/media_codecs_mediatek_audio.xml OMX.MTK.AUDIO.DECODER.MP2 orig-mp2
   strip_codec $V/etc/media_codecs_mediatek_video.xml OMX.MTK.VIDEO.DECODER.VP9 orig-vp9
+  # 7 no deep_buffer output: Dolby's DAP effect is attached to the primary output only, and media normally plays on the deep_buffer output, so Dolby had no audible effect
+  f=$V/etc/audio_policy_configuration.xml
+  if [ -f $f ] && grep -q 'name="deep_buffer"' $f; then
+    [ -f $f.orig-dolby ] || cat $f > $f.orig-dolby
+    awk 'index($0, "<mixPort name=\"deep_buffer\"") { skip = 1 } !skip { print } skip && /<\/mixPort>/ { skip = 0 }' $f.orig-dolby | sed 's/,deep_buffer//g' > /tmp/apc.new
+    ! grep -q deep_buffer /tmp/apc.new && cat /tmp/apc.new > $f && echo "vendor: deep_buffer output removed (Dolby)"
+  else echo "vendor: deep_buffer already removed"; fi
   # 6 AIDL lights HAL declaration for the Java brightness shim
   if [ -f $P/light_aidl.xml ]; then
     mkdir -p $V/etc/vintf/manifest
