@@ -31,3 +31,30 @@ source drop (missing Microtrust TEE v300 headers); `fastboot boot` is ignored by
 removed, the tethering BPF programs would have to load on 4.9, and `netd` and ConnectivityService open BPF maps at start-up. Possible
 but unattempted routes: patch the version check and hope the programs load (unlikely), or create and pin the maps from a helper and attach
 nothing (loses traffic accounting and the firewall, and is untested). Neither is small work.
+
+## eBPF wall: passed (2026-10-27)
+
+The netbpfload gate was not the only one. Everything below is applied by files under `tools/bpf/` (all apex files are signed, so patched copies
+are bind-mounted over them from `00_bpf_bind.rc`, which runs in `on load-bpf-programs` before `exec_start bpfloader`).
+
+1. `netbpfload`: kernel-version gates, fatal sysctl writes (`bpf_jit_kallsyms` does not exist, `unprivileged_bpf_disabled` rejects "0\n"),
+   the "no programs loaded yet" check (`BPF_PROG_GET_NEXT_ID` is 4.13+) and the same-device check for the object files (`patch_binaries.py netbpfload`).
+2. `netd.o`: kernel 4.9 has no `LRU_HASH`. The map type lives in two places, the BTF map definition and the loader's own `.android_maps`
+   table (180-byte entries, type first); both are rewritten to `HASH`. The 4.9 stats programs (`ingress/stats$4_9_t`, `egress/stats$4_9_t`)
+   are limited to bpfloader versions < 0xdac (pre-U), so their loader max version is raised (`patch_netd_o.py`). The verifier accepts them on 4.9.
+3. `libnetd_updatable.so`: three kernel-version gates plus the flag that forces the sockops program (`patch_binaries.py netd_updatable`).
+4. The platform bpfloader's final `netbpfload done` re-exec fails (ENOENT), so `bpf.progs_loaded` is never set. The ptrace wrapper
+   `netbpfload_tracer.c` (static, built with `python -m ziglang cc -target aarch64-linux-musl -static`) runs the patched netbpfload, logs every
+   `bpf()` call to the kernel log as `strace:` lines, and runs `setprop bpf.progs_loaded 1` after a clean exit.
+5. The vendor `aee_aedv` daemon makes the 4.9 kernel oops in `kobj_attr_show` on some boots; `00_aee_off.rc` defines the service first so init ignores the vendor one.
+
+Result: `netd1shot` exits 0, `netd`, `statsd` and both zygotes start.
+
+### Next wall: vendor HALs against the Lenovo OSS kernel
+The OSS kernel (4.9.117) does not match the stock vendor userland (built for 4.9.190):
+- `hwcomposer.mt6765.so` calls `DISP_IOCTL_GET_DISPLAY_CAPS` as `0x409c4fdb` (156-byte struct); the OSS `mtk_disp_mgr` rejects it ("ioctl not supported"),
+  so the composer HAL aborts, SurfaceFlinger dies and init restarts zygote in a loop.
+- `audioserver` crashes in `AudioFlinger::onFirstRef` (null read) and `vendor.mediatek.hardware.pq@2.2-service` crashes in `PQAshmemProxy::initMapMemory`
+  (null IMemory from the hidl allocator). Not yet analysed.
+Android 16 worked because it ran on the stock kernel. Each of these needs an ABI shim in the kernel or a switch back to the stock kernel with the
+MADV_WIPEONFORK / cgroup2 / cpuset_v2_mode backports applied some other way.
