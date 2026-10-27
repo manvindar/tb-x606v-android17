@@ -86,3 +86,14 @@ empty files), `tools/pulllog.sh N`, `tools/bpf/netbpfload_tracer.c` (also still 
 Boots to the boot animation with `system_server` running (PackageManager scans 164 packages, services start). Open: the vendor audio HAL is 5.0 and
 Android 17 has no `libaudiohal@5.0` (`audioserver` crashes in `AudioFlinger::onFirstRef`), `pq-2-2` crashes on the HIDL shared-memory mapper, and the
 first full boot with the fixed services.jar has not been observed yet.
+
+### Progress log (2026-10-27, later)
+Boot now reaches `boot_progress_ams_ready` (ActivityManager ready); system_server lives ~20 s per cycle. Walls passed since the stock-kernel switch:
+- tethering `libservice-connectivity.so` aborts in ClatCoordinator JNI_OnLoad when `/sys/fs/bpf/*` contexts are `fs_bpf` (stock 4.9 has no per-directory bpf labels):
+  NOP the abort (`tools/bpf/patch_binaries.py service_connectivity`).
+- `BpfNetMaps.initBpfMaps`, `ConnectivityService` (LocalNetEventListener) and `initLoopbackEventConsumer` all need the local_net / loopback ringbuf maps (kernel 5.x):
+  three bytecode edits in `tools/framework/patch_service_connectivity_jar.py` (the jar is bind-mounted over the apex copy by `tools/bpf/00_bpf_bind.rc`).
+- audio: Android 17 has no HIDL audio 5.0 client. `tools/audio/` pulls the Android 16 factory + 5.0 libs and stubs the one function whose ABI differs;
+  audioserver now stays up (no audio output yet), which stops the AudioService watchdog kill.
+- `BiometricCameraManagerImpl.subscribeToCameraEvents()` no-op (camera service cannot init its listener on this vendor): third edit in `patch_services_jar.py`.
+Still open: audio outputs (needs a real 5.0 client or a 6.0/7.0 HAL shim), camera, pq-2-2 crash, lmkd/memevents.

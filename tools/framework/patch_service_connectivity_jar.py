@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""service-connectivity.jar (tethering apex), two patches. (1) BpfNetMaps.initBpfMaps() opens the local_net_* maps when SdkLevel.isAtLeastC().
+"""service-connectivity.jar (tethering apex), three patches. (1) BpfNetMaps.initBpfMaps() opens the local_net_* maps when SdkLevel.isAtLeastC().
 Those maps (LPM_TRIE, ringbuf) cannot exist on kernel 4.9, so NetworkStatsServiceInitializer (and with it system_server) dies with
 "Cannot open local_net_access map". Make that branch unconditional-skip: `if-eqz v9, :skip` -> `goto/16 :skip`.
 Then fix the dex checksum + SHA-1 and rewrite the jar. The patched jar is bind-mounted over the apex copy.
@@ -18,6 +18,11 @@ raw[i + 6 + 2:i + 6 + 2 + 4] = bytes.fromhex('2900' + '8300')           # goto/1
 PAT2 = bytes.fromhex('6e1071100800' + '0a00' + '3800' + '1900')   # invoke-virtual {v8} isAtLeast26Q2 ; move-result v0 ; if-eqz v0,+0x19
 assert raw.count(PAT2) == 1, raw.count(PAT2)
 j = raw.find(PAT2); raw[j + 8:j + 12] = bytes.fromhex('2900' + '1900')       # goto/16 +0x19
+# (3) ConnectivityService$Dependencies.initLoopbackEventConsumer(): its native side (LoopbackEventHandler::Start) abort()s because the loopback ringbuf
+#     map does not exist on kernel 4.9. nop out the invoke-static (3 units).
+PAT3 = bytes.fromhex('7100141900000e00')   # invoke-static BpfEventPoller.nativeInitLoopbackEventConsumer ; return-void
+assert raw.count(PAT3) == 1, raw.count(PAT3)
+raw[raw.find(PAT3):raw.find(PAT3) + 6] = bytes(6)
 fs = struct.unpack_from('<I', raw, 0x20)[0]
 raw[12:32] = hashlib.sha1(bytes(raw[32:fs])).digest()
 struct.pack_into('<I', raw, 8, zlib.adler32(bytes(raw[12:fs])) & 0xffffffff)

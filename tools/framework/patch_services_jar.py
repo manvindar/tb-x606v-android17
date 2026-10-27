@@ -54,10 +54,17 @@ assert raw[t:t + 14] == bytes.fromhex('5466a62a' + '7210a6090600' + '0c06' + '11
 raw[t:t + 14] = bytes.fromhex('5461a62a' + '7210a6090100' + '0c00' + '1100')
 raw[c:c + 4] = b'\0\0\0\0'                                  # 1. nop the null check on mPowerHal
 raw[h:h + 6] = bytes.fromhex('2900b9ff' + '0000')           # 2. goto/16 -0x47 (to the default-SupportInfo code at unit 0x12) ; nop (kills the orphaned const-string operand)
-# fix header: signature then checksum, of the dex that was edited (each dex's file_size is in its own header)
-fs = struct.unpack_from('<I', raw, base + 0x20)[0]
-raw[base + 12:base + 32] = hashlib.sha1(bytes(raw[base + 32:base + fs])).digest()
-struct.pack_into('<I', raw, base + 8, zlib.adler32(bytes(raw[base + 12:base + fs])) & 0xffffffff)
+# 3. BiometricCameraManagerImpl.subscribeToCameraEvents(): CameraManager.registerAvailabilityCallback throws on this device (the camera service cannot
+#    initialise its listener, Function not implemented) and BiometricService's handler thread takes system_server down. Make it a no-op.
+CAM = bytes.fromhex('5420e540' + '5422e440' + '1201' + '6e30d5132001' + '0e00')
+k = raw.find(CAM); assert k > 0 and raw.find(CAM, k + 1) < 0, 'camera pattern'
+raw[k:k + 4] = bytes.fromhex('0e000000')                      # return-void ; nop (keeps the rest of the method valid)
+touched = {base, max(x for x in heads if x <= k)}
+# fix headers: signature then checksum, of every dex that was edited (each dex's file_size is in its own header)
+for b0 in touched:
+    fs = struct.unpack_from('<I', raw, b0 + 0x20)[0]
+    raw[b0 + 12:b0 + 32] = hashlib.sha1(bytes(raw[b0 + 32:b0 + fs])).digest()
+    struct.pack_into('<I', raw, b0 + 8, zlib.adler32(bytes(raw[b0 + 12:b0 + fs])) & 0xffffffff)
 zout = zipfile.ZipFile(dst, 'w')
 for i in zin.infolist():
     data = bytes(raw) if i.filename == 'classes.dex' else zin.read(i.filename)
