@@ -148,6 +148,7 @@ for x, y in (('ro.secure=1', 'ro.secure=0'), ('ro.debuggable=0', 'ro.debuggable=
     assert x in bp, x; bp = bp.replace(x, y)
 bp += '\npersist.sys.bt.unsupported.commands=182\npersist.sys.usb.config=adb\nro.hw_timeout_multiplier=5\n'   # slow device: scales AMS/Watchdog/ANR timeouts
 bp += 'dalvik.vm.usap_pool_enabled=true\ndalvik.vm.usap_pool_size_max=4\ndalvik.vm.usap_pool_refill_threshold=2\n'    # pre-forked app processes: faster app start, GSIs ship it off
+bp += 'persist.vendor.sys.pq.shp.idx=0\n'     # MediaTek sharpening off by default: it makes video look worse (ROM Tuner > Picture quality changes it)
 bp += 'persist.sysui.disableBlur=1\n'     # window blur (Pixel Launcher drawer, shade) drops the GE8320 to ~17 fps: 72% janky frames with blur, 5% without
 bp += 'persist.traced.enable=0\n'    # perfetto traced crash-loops on kernel 4.9 (no vsock) and flags_health_check retries every 5 s
 # the GSI ships no bluetooth.mk properties, so no profile (A2DP, HFP, HID...) is started and nothing can connect
