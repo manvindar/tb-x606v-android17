@@ -25,6 +25,13 @@ size = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(tmp + '/t
 size = (int(size * 1.25) + (24 << 20)) // 4096 * 4096
 ext4 = tmp + '/payload.img'
 run(os.path.join(E2, 'mke2fs'), '-q', '-t', 'ext4', '-b', '4096', '-O', '^has_journal', '-m', '0', '-L', '', '-E', 'root_owner=0:0', '-d', tmp + '/tree', ext4, str(size // 1024) + 'k')
+# mke2fs -d gives every file the uid/gid of whoever runs this; the other APEX payloads are owned by system (1000:1000)
+own = ['set_inode_field / uid 1000', 'set_inode_field / gid 1000']
+for d, ds, fs in os.walk(tmp + '/tree'):
+    for n in ds + fs:
+        rel = os.path.join(d, n)[len(tmp + '/tree'):]; own += [f'set_inode_field {rel} uid 1000', f'set_inode_field {rel} gid 1000']
+open(tmp + '/own', 'w').write('\n'.join(own) + '\n')
+run(os.path.join(E2, 'debugfs'), '-w', '-f', tmp + '/own', ext4)
 shutil.move(ext4, pay)
 total = (size + size // 64 + (1 << 20)) // 4096 * 4096   # hashtree is 1/128 of the data (+ vbmeta, footer)
 run('python3', '-I', here + '/avbtool.py', 'add_hashtree_footer', '--image', pay, '--partition_size', str(total), '--partition_name', '',
