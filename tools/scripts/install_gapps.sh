@@ -58,10 +58,13 @@ $ADB shell 'set -e; cd /data/local/tmp/gapps
 : > /data/local/tmp/gapps.list
 for top in product/priv-app product/app product/etc product/framework product/overlay system_ext/priv-app system_ext/etc; do
   [ -d $top ] || continue
-  for e in $(ls $top); do echo /system/$top/$e >> /data/local/tmp/gapps.list; done
+  case $top in
+    */etc) (cd $top && find . -type f) | sed "s|^\\.|/system/$top|" >> /data/local/tmp/gapps.list;;   # etc dirs are shared with the base system: record files only
+    *) for e in $(ls $top); do echo /system/$top/$e >> /data/local/tmp/gapps.list; done;;
+  esac
   mkdir -p /system/$top; cp -r $top/. /system/$top/
 done
-while read p; do chown -R 0:0 $p; find $p -type d -exec chmod 755 {} +; find $p -type f -exec chmod 644 {} +; chcon -R u:object_r:system_file:s0 $p; done < /data/local/tmp/gapps.list
+while read p; do chown -R 0:0 $p; chmod -R u=rwX,go=rX $p; chcon -R u:object_r:system_file:s0 $p; done < /data/local/tmp/gapps.list
 cat /data/local/tmp/gapps.list > /system/etc/gapps-installed.txt; chmod 644 /system/etc/gapps-installed.txt
 rm -rf /data/local/tmp/gapps /data/local/tmp/gapps.list; sync; echo installed; wc -l < /system/etc/gapps-installed.txt'
 rm -rf $W

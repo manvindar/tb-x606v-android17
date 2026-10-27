@@ -86,6 +86,12 @@ Maps (and any app registering an over-budget listener with the new `MemoryBudget
 functions in `libandroid_runtime.so` return 0 when the kernel cannot deliver memory budget events. `tools/libc/patch_libandroid_runtime.py` makes both natives return a dummy handle (no event ever fires).
 Replace `/system/lib64/libandroid_runtime.so` with a new file and `mv` it (never overwrite in place).
 
+## Video playback from the gallery
+
+Recording worked but playing the clip failed: the Gallery picks `c2.android.avc.decoder` (software Codec2), which runs in `mediaswcodec` from the `com.android.media.swcodec` APEX. That APEX carries its own `libui.so`
+with the same gralloc problems as the system one, and `mediaswcodec` aborted with `gralloc-mapper is missing`. `tools/libc/patch_libui.py` (both patches, 64-bit and 32-bit) is applied to the APEX copies, which are
+bind-mounted from `/system/etc/bpf.a17/libui_swcodec{64,32}.so` by `00_bpf_bind.rc`.
+
 ## GPS
 
 The vendor GNSS stack works end to end: `mnld` starts, NMEA flows every second and `system_server` receives satellite status messages. Indoors there are no satellite signals (zero C/N0 reports), so no fix;
