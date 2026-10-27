@@ -50,7 +50,7 @@ putkey() { grep -v "^$1=" $S > $S.t; echo "$1=$2" >> $S.t; mv $S.t $S; }
 publish() {   # copy state (+ a status line) to the app; the file is pre-created with the app's owner/context
   [ -f $APP/state ] || return
   gpu_eff=0; [ "$gpu_freq" != 0 ] && [ "$perf_profile" != battery ] && gpu_eff=1
-  { cat $S; echo "govs=$(tr ' ' , < /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors)"; echo "gpu_opps=$(sed -n 's/.*freq = \([0-9]*\),.*/\1/p' /proc/gpufreq/gpufreq_opp_dump | tr '\n' ,)"; echo "io_scheds=$(tr -d '[]' < /sys/block/mmcblk0/queue/scheduler | tr ' ' ,)"; echo "tcps=$(tr ' ' , < /proc/sys/net/ipv4/tcp_available_congestion_control)"; echo "fonts=$(cmd overlay list --user 0 | grep -oE "[A-Za-z0-9_.]*\\.font\\.[a-z0-9]+\$" | sed "s/.*font\\.//" | sort -u | tr "\\n" ,)"; ovl "icon\\.squircle" && echo has_shapes=1 || echo has_shapes=0; ovl "icon_pack\\.rounded\\.android" && echo has_packs=1 || echo has_packs=0; echo "status=$perf_profile, GPU $([ "$gpu_eff" = 1 ] && echo locked $((gpu_freq/1000)) MHz || echo auto)"; } > $APP/state
+  { cat $S; echo "profiles=$(cut -d"|" -f1 $PF 2>/dev/null | tr "\n" ,)"; echo "govs=$(tr ' ' , < /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors)"; echo "gpu_opps=$(sed -n 's/.*freq = \([0-9]*\),.*/\1/p' /proc/gpufreq/gpufreq_opp_dump | tr '\n' ,)"; echo "io_scheds=$(tr -d '[]' < /sys/block/mmcblk0/queue/scheduler | tr ' ' ,)"; echo "tcps=$(tr ' ' , < /proc/sys/net/ipv4/tcp_available_congestion_control)"; echo "fonts=$(cmd overlay list --user 0 | grep -oE "[A-Za-z0-9_.]*\\.font\\.[a-z0-9]+\$" | sed "s/.*font\\.//" | sort -u | tr "\\n" ,)"; ovl "icon\\.squircle" && echo has_shapes=1 || echo has_shapes=0; ovl "icon_pack\\.rounded\\.android" && echo has_packs=1 || echo has_packs=0; echo "status=$perf_profile, GPU $([ "$gpu_eff" = 1 ] && echo locked $((gpu_freq/1000)) MHz || echo auto)"; } > $APP/state
 }
 
 # ---------- appliers ----------
@@ -129,6 +129,20 @@ pq_apply() {
   done
   [ $ch = 1 ] && { stop pq-2-2; sleep 1; start pq-2-2; log "picture quality applied"; }
 }
+# saved profiles: one line per profile in $PF, "name|key=value key=value ...". They hold the performance, memory and picture keys, not the look.
+PF=/data/local/tmp/tuner.profiles
+PKEYS="perf_profile gpu_freq oc governor thermal fg_boost ta_boost big_rotation cap_big cap_little dirty swappiness vfs_cache extra_free page_cluster io_sched readahead tcp_cc pq_dre pq_vp_dre pq_hdr pq_ultrares pq_shp pq_color"
+profile_save() {   # $1 name
+  [ -f $PF ] && grep -v "^$1|" $PF > $PF.t || : > $PF.t
+  line="$1|"; for k in $PKEYS; do eval x=\$$k; [ -n "$x" ] && line="$line$k=$x "; done
+  echo "$line" >> $PF.t; mv $PF.t $PF; log "saved profile $1"
+}
+profile_delete() { [ -f $PF ] && { grep -v "^$1|" $PF > $PF.t; mv $PF.t $PF; log "deleted profile $1"; }; }
+profile_apply() {  # $1 name -> state keys
+  l=$(grep "^$1|" $PF 2>/dev/null | head -1); [ -z "$l" ] && { log "no profile $1"; return 1; }
+  for kv in ${l#*|}; do putkey ${kv%%=*} ${kv#*=}; done
+  putkey preset custom; putkey profile_active "$1"; log "applied profile $1"
+}
 cpm() { case $1 in 0) echo 'Default(Normal) mode';; 1) echo 'Low Power mode';; 2) echo 'Just Make mode';; 3) echo 'Performance(Sports) mode';; esac; }
 presets() {   # $1 name -> state keys
   case $1 in
@@ -198,7 +212,7 @@ handle() {
   while IFS== read -r k v; do
     case $v in ''|*[!A-Za-z0-9._-]*) log "reject $k"; continue;; esac
     log "req $k=$v"
-    case $k in preset|restart_ui|reboot|night|black_theme|phh_effects|nav_mode|anim_scale|density|bootanim|logging|palette_source|accent|theme_style|font|icon_shape|icon_pack|screen_timeout|font_scale|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|adb_tcp|bt_work|serial_console|pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_color) ;; *) putkey preset custom;; esac
+    case $k in preset|restart_ui|reboot|night|black_theme|phh_effects|nav_mode|anim_scale|density|bootanim|logging|palette_source|accent|theme_style|font|icon_shape|icon_pack|screen_timeout|font_scale|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|adb_tcp|bt_work|serial_console|pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_color|save_profile|apply_profile|delete_profile|profile_active) ;; *) putkey preset custom; putkey profile_active "";; esac
     case $k in
       perf_profile|gpu_lock|gpu_freq|oc|fg_boost|cap_big|cap_little) P=1; U=1; putkey $k $v;;
       palette_source|accent|theme_style|font|icon_shape|icon_pack) T=1; putkey $k $v;;
@@ -206,7 +220,10 @@ handle() {
       screen_timeout|font_scale|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|adb_tcp|bt_work|serial_console) putkey $k $v; load; ext $k; continue;;
       night|black_theme|nav_mode|anim_scale|density|bootanim|logging) putkey $k $v;;
       pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_color) putkey $k $v; Q=1; load; continue;;
-      preset) for kv in $(presets $v); do putkey ${kv%%=*} ${kv#*=}; done; putkey preset $v; P=1; U=1; load; continue;;
+      save_profile) profile_save $v; putkey profile_active $v; load; continue;;
+      delete_profile) profile_delete $v; [ "$profile_active" = "$v" ] && putkey profile_active ""; load; continue;;
+      apply_profile) profile_apply $v && { P=1; U=1; Q=1; }; load; continue;;
+      preset) for kv in $(presets $v); do putkey ${kv%%=*} ${kv#*=}; done; putkey preset $v; putkey profile_active ""; P=1; U=1; load; continue;;
       restart_ui) pkill -f com.android.systemui; continue;;
       reboot) sync; reboot; continue;;
       *) log "unknown $k"; continue;;

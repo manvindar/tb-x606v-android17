@@ -333,16 +333,18 @@ public class MainActivity extends Activity {
         d.setSelected(idx);
         d.setOnPick(i -> { set("preset", PRESETS[i][0]); build(); });
         col.addView(d, new LinearLayout.LayoutParams(-1, -2));
-        TextView name = text(idx >= 0 ? PRESETS[idx][1] : "Custom", 34, true, ink());
+        String ap = get("profile_active", "");
+        TextView name = text(idx >= 0 ? PRESETS[idx][1] : ap.isEmpty() ? "Custom" : ap.replace('_', ' '), 34, true, ink());
         name.setGravity(Gravity.CENTER); name.setPadding(0, px(8), 0, px(4));
         col.addView(name, new LinearLayout.LayoutParams(-1, -2));
-        TextView desc = text(idx >= 0 ? PRESETS[idx][2] : "You changed individual performance settings. Pick a preset on the dial to start over.", 15, false, dim());
+        TextView desc = text(idx >= 0 ? PRESETS[idx][2] : ap.isEmpty() ? "You changed individual settings. Pick a preset on the dial to start over, or save these as a profile below." : "Your saved profile. Pick a preset on the dial to leave it.", 15, false, dim());
         desc.setGravity(Gravity.CENTER); desc.setPadding(px(24), 0, px(24), px(10));
         col.addView(desc, new LinearLayout.LayoutParams(-1, -2));
 
         liveCard();
         LinearLayout c = group(null);
         rowGo(c, "Performance details", perfSummary(), "perf");
+        profileRows(c);
         c = group(null);
         rowGo(c, "Picture", pictureSummary(), "picture");
         rowGo(c, "Look", lookSummary(), "look");
@@ -350,6 +352,33 @@ public class MainActivity extends Activity {
         rowGo(c, "Memory and storage", "Read-ahead " + pick(get("readahead", "512"), new String[]{"128", "256", "512", "1024", "2048"}, new String[]{"128 KB", "256 KB", "512 KB", "1 MB", "2 MB"}, get("readahead", "512") + " KB") + ", swappiness " + get("swappiness", "100"), "memory");
         rowGo(c, "Connections", "Private DNS " + pick(get("dns", "auto"), new String[]{"off", "auto", "google", "cloudflare", "adguard", "quad9"}, new String[]{"off", "automatic", "Google", "Cloudflare", "AdGuard", "Quad9"}, "automatic"), "connect");
         rowGo(c, "System", get("status", "Shortcuts, logging, restart"), "system");
+    }
+
+    /** Saved profiles: tap to apply, Delete to remove, and a row that saves the current performance, memory and picture settings. */
+    private void profileRows(LinearLayout c) {
+        String active = get("profile_active", "");
+        for (final String n : get("profiles", "").split(",")) {
+            if (n.isEmpty()) continue;
+            final String shown = n.replace('_', ' ');
+            TextView del = text("Delete", 14, true, accent());
+            del.setPadding(px(12), px(8), px(4), px(8));
+            del.setOnClickListener(v -> new AlertDialog.Builder(this).setMessage("Delete the profile \"" + shown + "\"?")
+                .setNegativeButton("Cancel", null).setPositiveButton("Delete", (d, w) -> set("delete_profile", n)).show());
+            row(c, n.equals(active) ? shown + "  ✓" : shown, n.equals(active) ? "In use" : "Tap to apply", del)
+                .setOnClickListener(v -> { set("apply_profile", n); });
+        }
+        row(c, "Save current settings as a profile", "Keeps performance, memory and picture settings under a name", text("Save", 15, true, accent()))
+            .setOnClickListener(v -> {
+                final EditText name = new EditText(this);
+                name.setHint("Profile name"); name.setSingleLine(true); name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(24)});
+                name.setPadding(px(24), px(16), px(24), px(8));
+                new AlertDialog.Builder(this).setTitle("Save profile").setView(name).setNegativeButton("Cancel", null)
+                    .setPositiveButton("Save", (d, w) -> {
+                        String n = name.getText().toString().trim().replaceAll("[^A-Za-z0-9]+", "_").replaceAll("^_+|_+$", "");
+                        if (n.isEmpty()) { Toast.makeText(this, "Use letters or numbers in the name", Toast.LENGTH_SHORT).show(); return; }
+                        set("save_profile", n);
+                    }).show();
+            });
     }
 
     private String perfSummary() {
