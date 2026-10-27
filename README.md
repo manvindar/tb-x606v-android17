@@ -236,3 +236,5 @@ Google's GSI, the Lenovo stock images and the vendor files are not included, and
 This is a personal experiment with no warranty: it can leave the tablet unbootable.
 
 Performance notes (what made it fast, what did not): [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+
+Installing from TWRP with a single zip (flash, vendor edits, automatic app compile): [docs/TWRP_INSTALL.md](docs/TWRP_INSTALL.md).
