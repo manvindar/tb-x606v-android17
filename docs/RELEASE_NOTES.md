@@ -26,6 +26,6 @@ Boot, GPU, Wi-Fi, Bluetooth (pairing, A2DP, HFP), audio including apps, camera a
 (gapps image), GPS with sky in view, ROM Tuner, Gemini boot animation, root adb.
 
 ## What does not
-Cellular (calls, SMS, mobile data: the vendor radio HAL is 1.1), USB tethering and Widevine playback are untested, SELinux boots permissive and the image is debuggable.
+Cellular (calls, SMS, mobile data: the vendor radio HAL is 1.1), and USB tethering are untested; Netflix plays (Widevine level and resolution not measured), SELinux boots permissive and the image is debuggable.
 
 Use at your own risk: a bad flash can need TWRP or a BROM tool to recover (`tools/restore_stock_boot.md`).

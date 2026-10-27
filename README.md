@@ -78,7 +78,7 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
 | Cellular (calls, SMS, mobile data) | not working, see below |
 | USB file transfer | works (checked with libmtp); tethering untested |
-| DRM (Widevine) | HAL found, RKPD provisioning fails; playback untested |
+| DRM (Widevine) | Netflix plays (secure video layer, audio output); Widevine level and maximum resolution not measured |
 
 First boot is slow until the apps are compiled. The GSI ships no odex, so every app runs from its APK. Run `tools/scripts/dexopt_all.sh`
 once (it takes a few minutes): Settings goes from about 50 s to under a second cold.
@@ -92,7 +92,7 @@ From a read of the logs after a clean boot (no crashes, ANRs or service restarts
   a radio HAL translation layer; not attempted. Needs a SIM to confirm.
 - **USB.** `UsbDeviceManager` logs "usb gadget hidl hal service not found" (the vendor only has `android.hardware.usb@1.1`, port roles) and falls back to its legacy handler, which drives `sys.usb.config`.
   Checked: switching to file transfer works, and `libmtp` on the Mac lists the tablet's storage and folders. USB tethering is untested.
-- **Widevine.** The vendor DRM HAL (`drm@1.2`, widevine instance) is found by the framework. The new `RkpdWidevine` provisioning (remote key provisioning for Widevine) fails with `ERROR_DRM_CANNOT_HANDLE`
+- **Widevine.** The vendor DRM HAL (`drm@1.2`, widevine instance) is found by the framework. The new `RkpdWidevine` provisioning (remote key provisioning for Widevine) fails with `ERROR_DRM_CANNOT_HANDLE` in the log, but Netflix still installs and plays: checked over adb while a title was playing (media session PLAYING, SurfaceFlinger drawing a `(Secure)` player layer, an active audio track). The resolution and the Widevine security level (L1 or L3) were not measured.
   because the old HAL has no such property; the classic provisioning may still work. Protected playback is untested (it needs an app; a plain `app_process` test cannot open `MediaDrm`).
 - **Harmless noise.** fs-verity setup fails on every permissions write (the kernel has no verity), the GPU memory BPF map and `bpf_system_stats` ringbuf iterator are missing, and fingerprint, face and a
   few other managers are absent on this hardware. The Wi-Fi data-stall monitor logs "ignore this poll" constantly.
