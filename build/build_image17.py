@@ -161,6 +161,8 @@ print('3 libc, linkers, libui, ...')
 def patched(tool, path, name):
     """stock file -> patch tool -> work file"""
     src = tmpf(name + '.orig', cat(S, path)); out = wp(name + '.p'); py(tool, src, out); return out
+# services.jar: HintManager/camera/build-consistent fixes, then the network location provider bind (Play services does not hold INSTALL_LOCATION_PROVIDER)
+services_loc = wp('services.loc.p'); py('framework/patch_location_provider.py', patched('framework/patch_services_jar.py', '/system/framework/services.jar', 'services'), services_loc)
 libc64 = patched('libc/patch_libc.py', '/system/lib64/bootstrap/libc.so', 'libc64'); libc32 = patched('libc/patch_libc.py', '/system/lib/bootstrap/libc.so', 'libc32')
 ld64 = patched('libc/patch_libc.py', '/system/bin/bootstrap/linker64', 'linker64'); ld32 = patched('libc/patch_libc.py', '/system/bin/bootstrap/linker', 'linker32')
 for path, f in (('/system/lib64/bootstrap/libc.so', libc64), ('/system/lib/bootstrap/libc.so', libc32), ('/system/bin/bootstrap/linker64', ld64), ('/system/bin/bootstrap/linker', ld32),
@@ -169,7 +171,7 @@ for path, f in (('/system/lib64/bootstrap/libc.so', libc64), ('/system/lib/boots
                 ('/system/lib64/libmeminfo.so', patched('libc/patch_libmeminfo.py', '/system/lib64/libmeminfo.so', 'meminfo')),
                 ('/system/lib64/libbinder.so', patched('libc/patch_libbinder.py', '/system/lib64/libbinder.so', 'binder')),
                 ('/system/lib64/libandroid_runtime.so', patched('libc/patch_libandroid_runtime.py', '/system/lib64/libandroid_runtime.so', 'androidrt')),
-                ('/system/framework/services.jar', patched('framework/patch_services_jar.py', '/system/framework/services.jar', 'services'))):
+                ('/system/framework/services.jar', services_loc)):
     replace(S, path, f)
 # the runtime APEX carries its own copies of libc and the linkers (apps and the bionic namespace use them)
 open(wp('rt.apex'), 'wb').write(cat(S, '/system/apex/com.android.runtime.apex'))
