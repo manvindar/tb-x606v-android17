@@ -59,7 +59,13 @@ raw[h:h + 6] = bytes.fromhex('2900b9ff' + '0000')           # 2. goto/16 -0x47 (
 CAM = bytes.fromhex('5420e540' + '5422e440' + '1201' + '6e30d5132001' + '0e00')
 k = raw.find(CAM); assert k > 0 and raw.find(CAM, k + 1) < 0, 'camera pattern'
 raw[k:k + 4] = bytes.fromhex('0e000000')                      # return-void ; nop (keeps the rest of the method valid)
-touched = {base, max(x for x in heads if x <= k)}
+# 4. ActivityTaskManagerService.LocalService.showSystemReadyErrorDialogsIfNeeded(): `Build.isBuildConsistent()` (Treble => VintfObject.verifyBuildAtBoot) is false
+#    for a GSI over this Android 10 vendor (sepolicy 29.0, VNDK 29, kernel 4.9), which shows "There's an internal problem with your device".
+#    Treat the build as consistent: const/4 v2,#1 ; nop x3 replaces `invoke-static {} isBuildConsistent ; move-result v2`.
+BC = bytes.fromhex('7100e90f0000' + '0a02')
+bk = raw.find(BC); assert bk > 0 and raw.find(BC, bk + 1) < 0, 'isBuildConsistent pattern'
+raw[bk:bk + 8] = bytes.fromhex('1212' + '000000000000')
+touched = {base, max(x for x in heads if x <= k), max(x for x in heads if x <= bk)}
 # fix headers: signature then checksum, of every dex that was edited (each dex's file_size is in its own header)
 for b0 in touched:
     fs = struct.unpack_from('<I', raw, b0 + 0x20)[0]

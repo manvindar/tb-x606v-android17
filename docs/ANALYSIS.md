@@ -109,3 +109,14 @@ system_server stable (pid unchanged for minutes), SurfaceFlinger composes, Syste
 the "There's an internal problem with your device" dialog (Build.isBuildConsistent, Treble => VINTF verifyBuildAtBoot), SystemUI start slow/ANR before dexopt
 (`cmd package compile -m speed -f com.android.systemui com.android.launcher3` fixes it), black wallpaper/home, lmkd is a stub (AMS spams "Failed to connect to lmkd").
 Unattended loop from here: adb root, `mount -o remount,rw /` (and /vendor), edit, `adb reboot`.
+
+### Milestone: Settings and Home reachable (2026-10-27, adb loop)
+With adb available after each boot the fixes became a live loop (adb root, `mount -o remount,rw /`, edit, `adb reboot`):
+- build-consistency dialog: `Build.isBuildConsistent()` forced true in services.jar (`tools/framework/patch_services_jar.py`, edit 4). `vintf` on the device says why it fails
+  (sepolicy 29.0, VNDK 29, kernel 4.9 vs the Android 17 compatibility matrix).
+- SystemUI/phone "failed to complete startup" crash loop (black screen): app startup on this SoC is slower than Android's 15 s `BIND_APPLICATION_TIMEOUT`;
+  `ro.hw_timeout_multiplier=5` scales all AMS/ANR/Watchdog timeouts (`tools/system_fixups.sh`). `cmd package compile -m speed -f com.android.systemui` helps too.
+- Camera/Sensor/Audio "-38" (system_server crash on BOOT_COMPLETED): `IBinder::addFrozenStateChangeCallback` needs a 6.x kernel binder ioctl; patched to succeed (`tools/libc/patch_libbinder.py`).
+- pq@2.2 HAL crash loop: the vendor libhidlbase searches `/system/lib64/vndk-sp-29/hw` for `android.hidl.memory@1.0-impl.so`; the A17 image lacks that link (A16 had it).
+- the screen is off after the display timeout and `screencap` is black then: `svc power stayon true`.
+Open: Bluetooth (com.android.bluetooth native crash), audio outputs, camera, lmkd stub, ArrowOS boot animation file (leftover from the Android 16 customization).
