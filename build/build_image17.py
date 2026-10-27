@@ -151,6 +151,9 @@ bp += 'dalvik.vm.usap_pool_enabled=true\ndalvik.vm.usap_pool_size_max=4\ndalvik.
 bp += 'persist.vendor.sys.pq.shp.idx=0\n'     # MediaTek sharpening off by default: it makes video look worse (ROM Tuner > Picture quality changes it)
 bp += 'persist.sysui.disableBlur=1\n'     # window blur (Pixel Launcher drawer, shade) drops the GE8320 to ~17 fps: 72% janky frames with blur, 5% without
 bp += 'persist.traced.enable=0\n'    # perfetto traced crash-loops on kernel 4.9 (no vsock) and flags_health_check retries every 5 s
+# stock-looking fingerprint assembled from the Lenovo vendor props (build id and incremental of V9.56). Made up: Lenovo's real one is not on the tablet, so Play does not know it
+bp += ('ro.build.fingerprint=Lenovo/full_achilles6_row_call/achilles6_row_call:10/QP1A.190711.020/TB-X606V_USR_S300665_2206300345_V9.56_BMP_ROW:user/release-keys\n'
+       'ro.build.description=full_achilles6_row_call-user 10 QP1A.190711.020 TB-X606V_USR_S300665_2206300345_V9.56_BMP_ROW release-keys\n')
 # the GSI ships no bluetooth.mk properties, so no profile (A2DP, HFP, HID...) is started and nothing can connect
 bp += ("\n# Bluetooth profiles (what AOSP's bluetooth.mk sets; a GSI without it starts no profile except hearing aid). Tablet without telephony or LE Audio.\n"
        'bluetooth.device.class_of_device=90,2,12\nbluetooth.profile.a2dp.source.enabled=true\nbluetooth.profile.avrcp.target.enabled=true\n'

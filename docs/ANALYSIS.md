@@ -148,3 +148,11 @@ See the README section "App audio". Short form: system_server's Java `getPermiss
 `audiopolicy-aidl-cpp.so` jump table (`patch_server_codes.py`) and `fix_aidl_codes.py` now reports `getMmapPolicyForDevice` as unsupported (code 200). Then `populatePermissionState` throws for enum values >= 16, which
 crashes system_server through an uncaught exception on the `audioserver_lifecycle` thread; `patch_audiopermission.py` returns success. Lesson: when changing what system_server talks to, test the calls from an `app_process`
 helper running as uid 1000 first; a wrong server reply there does not boot-loop the tablet. YouTube now plays with sound at 720p.
+
+## Chrome renderer (2026-10-27, night)
+
+Chrome opened but loaded nothing. Network was fine; the log showed `AppZygote: Error connecting to app zygote` and `Failure starting process ...:sandboxed_process0`. Android 17 hosts Chrome's renderer in a native app zygote started by `zygote_next`.
+`zygote_cli /dev/socket/zygote_next SpawnSubspecies ...` reproduced it and `zygote_next` logged `Unexpected error code returned by call to clone3(): ENOSYS`. Stub 1 in `tools/libc/patch_libc.py` emulates it with `clone()`.
+The next failure was in the child: `thread 'main' panicked at system/zygote/zygote/src/child_process.rs:81:43: Failed to check capability bound: GetCapBoundFailure(EINVAL)`, found with a ptrace logger (`write(2, ...)` buffers read out of the dying child).
+Stub 2 turns EINVAL for capabilities 38 to 40 into success. The first version did that for every capability and froze `system_server` in zygote's `for (i = 0; prctl(PR_CAPBSET_READ, i) >= 0; i++)` loop (boot stuck on the animation, recovered through TWRP by removing the bind mount).
+Verified by binding the final libc after boot and restarting zygote: `com.android.chrome_zygote_native` and several `sandboxed_process0` services run and Chrome loads pages.

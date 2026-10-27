@@ -74,6 +74,7 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 | Audio output | works (also in apps, YouTube plays with sound) through Android 16's `audioserver` and library closure run privately (`tools/audio`) |
 | Google apps | install script works (Play Store runs) |
 | YouTube playback | works with sound, 720p and up (hardware H.264; the vendor VP9 entry is removed); needed the `libui` usage-bit patch |
+| Chrome and WebView apps that use a sandboxed renderer | works (needed the `clone3` and capability fixes in `tools/libc/patch_libc.py`, see "Chrome shows no pages") |
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
 | Cellular (calls, SMS, mobile data) | not working, see below |
 | USB file transfer | works (checked with libmtp); tethering untested |
@@ -97,6 +98,7 @@ From a read of the logs after a clean boot (no crashes, ANRs or service restarts
   few other managers are absent on this hardware. The Wi-Fi data-stall monitor logs "ignore this poll" constantly.
 - **Load average** sits around 25. It is MediaTek kernel threads in uninterruptible sleep, not CPU use (the cores are about 95% idle).
 - `dumpsys bluetooth_manager` crashes the Bluetooth process (`ControllerImpl::Dump`); debug only.
+- **Cast.** Play services' Cast module loads, discovery starts and multicast DNS works both ways, but no device was found on the test network and Play services logs many `Error while decoding multicast packet` lines. Untested against a real Chromecast or Cast TV.
 - **A2DP input.** The legacy `a2dp` module used for A2DP input (acting as a sink) does not exist in the 5.0 HAL ("could not load HW module a2dp"). A2DP output to headphones works.
 
 ## Boot animation
@@ -116,6 +118,16 @@ gets the `INativePermissionController` through the Java `IAudioPolicyService` pr
 2. Once the controller is reachable, `populatePermissionState` rejects the A17 permission enum (A16 knows 16 values) with `EX_ILLEGAL_ARGUMENT`, and the exception on the `audioserver_lifecycle` thread kills `system_server`: boot loop, boot animation forever, no adb. `tools/audio/patch_audiopermission.py` makes it return success.
 
 Install both patches or neither. Testing without involving `system_server`: a small `app_process` program that switches to uid 1000, fetches the controller with transaction 113 and calls the three populate methods shows exactly what the server accepts.
+
+## Chrome shows no pages
+
+Android 17 starts Chrome's renderer through a native zygote (`zygote_next`, written in Rust) and its app zygote. Two things in it fail on kernel 4.9, one after the other:
+
+1. It forks with `clone3`, which the kernel does not have (ENOSYS). `system_server` logs `Failed to start a Native Child Zygote process` and Chrome stays blank. Bionic's `clone3()` wrapper now sends the fork case to a stub that calls `clone()` instead (the `clone3` only flags `CLONE_PIDFD`, `CLONE_CLEAR_SIGHAND` and `CLONE_INTO_CGROUP` are dropped).
+2. The forked child loops over capabilities 0 to 38 with `prctl(PR_CAPBSET_READ)` and panics on EINVAL (`child_process.rs:81: Failed to check capability bound`), because the kernel knows 0 to 37. A stub for `prctl()` returns success for read and drop of capabilities 38 to 40 only. A blanket "EINVAL means success" does not work: zygote's own C++ loop runs until the read fails, so `system_server` looped forever and the boot never finished (this happened once on the tablet).
+
+Both stubs live in the unused tail of the last executable page of `libc.so`; `patch_libc.py` places them and the builder applies it to the bootstrap libc and the runtime APEX copy. A new `system_server` is needed to see the effect: it keeps a dead connection to `zygote_next` after the first failure.
+How it was found: `zygote_cli` (in `/system/bin`) talks to the zygote socket, and a small ptrace logger that keeps the last syscalls per process showed the panic message written to stderr.
 
 ## Boot animation after a Tuner state from Android 16
 
@@ -176,7 +188,7 @@ up. The stock 4.9.190 boot image works, so Android 17 userspace is patched to ru
 
 Each item came from a real failure. `docs/ANALYSIS.md` has the evidence and the order they showed up in.
 
-- **libc and the linker** abort at startup without `MADV_WIPEONFORK`; the madvise failure branch is patched out (`tools/libc/patch_libc.py`). The same folder
+- **libc and the linker** abort at startup without `MADV_WIPEONFORK`; the madvise failure branch is patched out (`tools/libc/patch_libc.py`, which also emulates `clone3` and tolerates the extra capability numbers for the native zygote, see "Chrome shows no pages"). The same folder
   patches `libui` (an API-level gate on the HIDL mapper fallback), `libmeminfo` (aborts on a missing gpuMem BPF map) and `libbinder`
   (the frozen-state callback ioctl does not exist on 4.9). `patch_pgsetup.py` fixes the cgroup2 mount options.
 - **BPF.** `netbpfload`, `netd` and `libservice-connectivity` check for kernel 4.14 and newer map types. `tools/bpf` patches them, converts the LRU maps in
