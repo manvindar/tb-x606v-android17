@@ -14,6 +14,8 @@ for f in $W/etc/permissions/*.xml; do $ADB push $f $P/etc/permissions/ >/dev/nul
 $ADB push $W/etc/sysconfig/hiddenapi-whitelist-com.google.android.apps.nexuslauncher.xml $P/etc/sysconfig/ >/dev/null
 $ADB push "$D/privapp-permissions-nexuslauncher-a17.xml" $P/etc/permissions/ >/dev/null
 $ADB shell "chmod 755 $P/priv-app/NexusLauncherRelease; chmod 644 $P/priv-app/NexusLauncherRelease/*.apk $P/etc/permissions/*nexuslauncher* $P/etc/sysconfig/*nexuslauncher*; chown -R root:root $P/priv-app/NexusLauncherRelease; restorecon -R $P/priv-app/NexusLauncherRelease $P/etc >/dev/null 2>&1; sync"
+$ADB push "$D/pixel_home.sh" /system/bin/pixel_home.sh >/dev/null; $ADB push "$D/zz_pixel_home.rc" /system/etc/init/zz_pixel_home.rc >/dev/null
+$ADB shell "chmod 755 /system/bin/pixel_home.sh; chmod 644 /system/etc/init/zz_pixel_home.rc; chown root:root /system/bin/pixel_home.sh /system/etc/init/zz_pixel_home.rc; restorecon /system/bin/pixel_home.sh /system/etc/init/zz_pixel_home.rc"   # sets the home role after the reboot
 # no recents overlay: gesture navigation does not work yet (SystemUI AIDL mismatch), the 3-button bar uses AOSP's Launcher3 recents
-$ADB reboot; echo "rebooting; then run: $ADB shell cmd role add-role-holder --user 0 android.app.role.HOME com.google.android.apps.nexuslauncher"
+$ADB reboot; echo "rebooting; the Pixel Launcher becomes the home app by itself a few seconds after boot"
 rm -rf $W

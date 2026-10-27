@@ -29,3 +29,5 @@ Boot, GPU, Wi-Fi, Bluetooth (pairing, A2DP, HFP), audio including apps, camera a
 Cellular (calls, SMS, mobile data: the vendor radio HAL is 1.1), and USB tethering are untested; Netflix plays (Widevine level and resolution not measured), SELinux boots permissive and the image is debuggable.
 
 Use at your own risk: a bad flash can need TWRP or a BROM tool to recover (`tools/restore_stock_boot.md`).
+
+Not in these images: Dolby Atmos and the Pixel layer (both are optional builder inputs, see the README). There is no network (Wi-Fi) location; GPS needs the sky in view.

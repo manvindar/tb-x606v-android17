@@ -211,6 +211,12 @@ python3 build/verify_image.py system-a17-nogapps.img other.img          # file b
 ```
 The same build runs on GitHub Actions (`.github/workflows/build-image.yml`, Actions tab, "Run workflow"; tick `publish` to attach the images to a release). It produces `*-nodexopt.img.xz` files:
 the images have **no compiled app code** because `dex2oat` needs a booted tablet. After the first boot run `tools/scripts/dexopt_on_tablet.sh` once (10 to 15 minutes). The `v17-dp11-r*` releases are dumps of a tested tablet and are already compiled.
+Optional layers, both off by default and neither redistributable (so neither is in the CI images or the releases):
+- `--dolby DIR` adds Dolby Atmos from your own copy of the Lenovo firmware (`DaxUI.apk`, `daxService.patched.apk`, `com.dolby.daxservice.xml`). The vendor side (`libswdap.so` fix, `vendor_mac_permissions.xml`) lives in the vendor partition and survives system flashes.
+- `--pixel NikGapps-full-arm64-16-*.zip --pixel-launcher-apk PIXEL.apk` adds the Pixel layer described in `docs/PIXEL.md`: Pixel Launcher (rebuilt from the Android 17 APKMirror APK with `tools/pixel/build_pixel_launcher.sh`), Wallpaper & style, sounds,
+  Google Contacts, Calculator, Files, Calendar and Clock, and a one-shot at the first boot that makes the Pixel Launcher the home app and hides the duplicate AOSP Contacts and Files icons. Before writing the image the builder checks that every priv-app's
+  privileged permissions are allowlisted and refuses to build otherwise: a missing entry makes system_server abort and the tablet stays on the boot animation.
+
 Install the result like any other image (`tools/scripts/install_a17.sh`). The vendor edits are a separate step (`apply_vendor_a17.sh`, done by the installer).
 
 How well the builder matches the tested tablet image: `verify_image.py` finds every file identical (including the repacked APEX payloads) except the compiled app code, files that were only backups or experiments on the tablet
