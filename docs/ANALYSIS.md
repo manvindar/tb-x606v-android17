@@ -97,3 +97,8 @@ Boot now reaches `boot_progress_ams_ready` (ActivityManager ready); system_serve
   audioserver now stays up (no audio output yet), which stops the AudioService watchdog kill.
 - `BiometricCameraManagerImpl.subscribeToCameraEvents()` no-op (camera service cannot init its listener on this vendor): third edit in `patch_services_jar.py`.
 Still open: audio outputs (needs a real 5.0 client or a 6.0/7.0 HAL shim), camera, pq-2-2 crash, lmkd/memevents.
+
+### Milestone (2026-10-27): Android 17 UI reached
+After the loopback consumer no-op, system_server stays up and the UI comes up on the tablet: Android 17 shows the system dialog
+"There's an internal problem with your device. Contact your manufacturer for details" (the build-consistency check in ActivityManagerService.systemReady,
+`Build.isBuildConsistent()`). Then the tablet powered off (cause not yet read from the logs).
