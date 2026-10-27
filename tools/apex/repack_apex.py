@@ -20,7 +20,7 @@ pay = tmp + '/z/apex_payload.img'
 info = run('python3', '-I', here + '/avbtool.py', 'info_image', '--image', pay)
 orig = int(re.search(r'Original image size:\s+(\d+)', info).group(1)); total = None
 block = int(re.search(r'Data Block Size:\s+(\d+)', info).group(1)); apexkey = re.search(r"Prop: apex.key -> '([^']+)'", info).group(1)
-total = orig + (1 << 20)   # room for hashtree + vbmeta + footer
+total = (orig + orig // 64 + (1 << 20)) // block * block   # room for hashtree (1/128 of the data) + vbmeta + footer
 with open(pay, 'r+b') as f: f.truncate(orig)                       # drop hashtree + vbmeta + footer
 for path, local in repl.items():
     new = open(local, 'rb').read()

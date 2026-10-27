@@ -1,92 +1,184 @@
 #!/usr/bin/env python3
-"""Android 17 (Google aosp_arm64 GSI) -> TB-X606V system image. EXPERIMENTAL, does not boot to a UI yet (see README).
+"""Android 17 (Google aosp_arm64 GSI DP11.261002.005) -> TB-X606V system image: every change that was applied to the tested tablet, rebuilt offline.
 
-usage: build_image17.py --gsi system.img --a16 system-a16.img --out system-a17.img [--port-repo DIR] [--with-tuner] [--no-bootdiag]
+usage: build_image17.py --gsi system.img --donor LineageOS-23.2-GSI.img --out system-a17.img [--gapps MindTheGapps.zip [--out-gapps system-a17-gapps.img]]
+                        [--port-repo DIR] [--with-bootdiag] [--no-tuner]
 
-Everything is done offline with debugfs (no mount, runs on macOS). Steps, each one fixes a failure seen on the tablet:
-  1  copy, grow to the 0xf3800000-byte partition, drop ext4 shared_blocks
-  2  init: boot SELinux permissive (the GSI is a *user* build, so the Android 16 patch does not apply)
-  3  build.prop: debuggable, adb unauthenticated, Bluetooth MediaTek workaround
-  4  VNDK v29 apex copied from the Android 16 image (the Android 10 vendor links against it; the GSI ships v31-v34)
-  5  SELinux mapping 29.0 for the Android 10 vendor policy, copied from the Android 16 image and pruned of types that
-     Android 17 removed (secilc fails otherwise)
-  6  cgroups.json: no blkio controller (kernel has none), freezer on cgroup2 optional
-  7  com.android.virt.apex removed (EROFS payload, kernel 4.9 has no EROFS)
-  8  /system netbpfload.rc without reboot_on_failure. NOT ENOUGH: the tethering APEX ships its own bpfloader service with the
-     same option, and netbpfload itself refuses kernels older than 4.14 ('Android U requires kernel 4.14'). This is the wall.
-  9  lmkd replaced by an idle stub (needs PSI/memcg; it is a critical service that would reboot the tablet)
-The vendor partition needs its own fix (tools/fix_vendor_a17.py)."""
-import argparse, hashlib, os, re, shutil, subprocess, sys, tempfile
+Inputs: the raw ext4 `system.img` from Google's GSI zip, and a LineageOS 23.2 (Android 16) GSI as donor (VNDK 29, SELinux 29.0 mapping, audioserver and its libraries).
+Everything is done offline with debugfs (no mount, runs on macOS and Linux). Steps, each one fixes a failure seen on the tablet:
+   1  grow to the 0xf3800000-byte partition, drop ext4 shared_blocks
+   2  init: boot SELinux permissive (the GSI is a *user* build); build.prop (debuggable, Bluetooth workaround and profiles, timeouts for a slow device)
+   3  libc/linkers (MADV_WIPEONFORK), libprocessgroup_setup (cgroup mount options), libui (HIDL gralloc fallback, gralloc usage bits), libmeminfo, libbinder,
+      libandroid_runtime: patched copies in /system; libc and the linkers also inside the runtime APEX (repacked and re-signed with a generated key)
+   4  VNDK v29 APEX, SELinux mapping 29.0 for the Android 10 vendor, cgroups.json without blkio, vndk-sp-29 links
+   5  com.android.virt.apex: EROFS payload converted to ext4 (kernel 4.9 has no EROFS)
+   6  services.jar (HintManagerService with no AIDL power HAL), service-connectivity.jar, and the tethering/bluetooth/swcodec APEX files that must be patched but are signed:
+      patched copies in /system/etc/bpf.a17 and /system/bin/netbpfload.{a17,tracer}, bind-mounted by 00_bpf_bind.rc
+   7  audio: Android 16's audioserver and library closure run privately from /system/lib64/a16audio; the A17 clients get A16's AIDL numbers
+   8  lmkd replacement for the in-kernel low memory killer, lights shim (brightness), RT cgroup budgets, aee off, init.rc console only on request
+   9  ROM Tuner app + daemon and the Gemini boot animation (from the Android 16 port repo)
+  10  optional MindTheGapps (the same file selection as tools/scripts/install_gapps.sh)
+Compiled app code (oat/odex) cannot be produced offline: see tools/scripts/dexopt_on_tablet.sh. The vendor partition needs tools/scripts/apply_vendor_a17.sh."""
+import argparse, glob, hashlib, json, os, re, shutil, subprocess, sys, tempfile, zipfile
 
+HERE = os.path.dirname(os.path.abspath(__file__)); TOOLS = os.path.join(HERE, '..', 'tools')
 ap = argparse.ArgumentParser()
-ap.add_argument('--gsi', required=True); ap.add_argument('--a16', required=True, help='Android 16 system image (raw ext4) that boots on the tablet')
-ap.add_argument('--out', required=True)
-ap.add_argument('--e2fs', default='/opt/homebrew/opt/e2fsprogs/sbin')
-ap.add_argument('--port-repo', default=os.path.expanduser('~/Aistuff/tb-x606v-android16-port'), help='Android 16 port repo (ROM Tuner, boot diagnostics)')
-ap.add_argument('--with-tuner', action='store_true'); ap.add_argument('--no-bootdiag', action='store_true')
+ap.add_argument('--gsi', required=True, help='raw ext4 system.img from the Google GSI zip (DP11.261002.005)')
+ap.add_argument('--donor', '--a16', dest='donor', required=True, help='LineageOS 23.2 GSI, raw ext4')
+ap.add_argument('--out', required=True); ap.add_argument('--gapps', help='MindTheGapps-16.0.0-arm64 zip'); ap.add_argument('--out-gapps', help='write a second image with the Google apps (the --out image stays without)')
+ap.add_argument('--port-repo', default=os.path.join(HERE, '..', '..', 'tb-x606v-android16-port'), help='Android 16 port repo (ROM Tuner, boot animations)')
+ap.add_argument('--no-tuner', action='store_true'); ap.add_argument('--with-bootdiag', action='store_true', help='boot diagnostics service (logcat/kmsg into /data/local/tmp/bootdiag, costs performance)')
+ap.add_argument('--e2fs', help='directory with debugfs, e2fsck, resize2fs, mke2fs (default: found on PATH, /sbin, Homebrew)')
+ap.add_argument('--build-tools', help='Android SDK build-tools directory (zipalign, apksigner, d8); default $ANDROID_HOME/build-tools/<newest>')
+ap.add_argument('--workdir'); ap.add_argument('--keep-work', action='store_true')
 a = ap.parse_args()
-E = lambda t: os.path.join(a.e2fs, t)
+
+def find_dir(tool, extra):
+    for d in extra + os.environ.get('PATH', '').split(os.pathsep) + ['/sbin', '/usr/sbin', '/opt/homebrew/opt/e2fsprogs/sbin', '/usr/local/opt/e2fsprogs/sbin']:
+        if d and os.path.exists(os.path.join(d, tool)): return d
+    sys.exit(f'{tool} not found (install e2fsprogs; --e2fs DIR)')
+E2 = a.e2fs or find_dir('debugfs', [])
+def bt_dir():
+    if a.build_tools: return a.build_tools
+    for sdk in (os.environ.get('ANDROID_HOME'), os.environ.get('ANDROID_SDK_ROOT'), os.path.expanduser('~/Library/Android/sdk'), os.path.expanduser('~/Android/Sdk')):
+        c = sorted(glob.glob(os.path.join(sdk or '/nonexistent', 'build-tools', '*')), key=lambda p: [int(x) for x in re.findall(r'\d+', os.path.basename(p))])
+        if c: return c[-1]
+    sys.exit('Android SDK build-tools not found (zipalign, apksigner): set ANDROID_HOME or --build-tools')
+BT = bt_dir()
 PART = 0xf3800000
 INIT_SHA = 'bb702f17e6660ef8f2a1fd9158c2de876fa0c8f9679a7a49f4a2d02e1119451f'   # DP11.261002.005 /system/bin/init
-SYS, INIT_L, LMKD_L = 'u:object_r:system_file:s0', 'u:object_r:init_exec:s0', 'u:object_r:lmkd_exec:s0'
+SYS = 'u:object_r:system_file:s0'; LIB = 'u:object_r:system_lib_file:s0'
+W = a.workdir or tempfile.mkdtemp(prefix='a17build'); os.makedirs(W, exist_ok=True)
 
-def run(*c, ok=(0,)):
-    r = subprocess.run(c, capture_output=True, text=True)
-    if r.returncode not in ok: sys.exit(f'{c[0]} failed ({r.returncode}):\n{r.stdout[-2000:]}{r.stderr[-2000:]}')
+def run(*c, ok=(0,), env=None, cwd=None):
+    r = subprocess.run(c, capture_output=True, text=True, env=env, cwd=cwd)
+    if r.returncode not in ok: sys.exit(f'{c[0]} failed ({r.returncode}): {" ".join(map(str, c))[:300]}\n{r.stdout[-2000:]}{r.stderr[-2000:]}')
     return r.stdout
-def cat(img, path): return subprocess.run([E('debugfs'), '-R', f'cat {path}', img], capture_output=True).stdout
+def py(script, *args, env=None): return run(sys.executable, '-I', os.path.join(TOOLS, script), *map(str, args), env=env)
+def dbg(img, *c): return subprocess.run([os.path.join(E2, 'debugfs'), '-R', ' '.join(c), img], capture_output=True)
+def cat(img, path):
+    r = dbg(img, 'cat', path).stdout
+    if not r: sys.exit(f'{path} not found in {img}')
+    return r
+def tmpf(name, data):
+    p = os.path.join(W, name); open(p, 'wb' if isinstance(data, bytes) else 'w').write(data); return p
+def wp(name): return os.path.join(W, name)
+
+def attrs(img, path):
+    """(octal permission digits, uid, gid, SELinux label) of an existing file in the image"""
+    st = dbg(img, 'stat', path).stdout.decode('latin1')
+    m = re.search(r'Mode:\s+0?(\d+)', st); u = re.search(r'User:\s+(\d+)\s+Group:\s+(\d+)', st)
+    lbl = dbg(img, 'ea_get', '-V', path, 'security.selinux').stdout.decode('latin1').split('\n')[0].split('\0')[0].strip()
+    assert m and u and lbl, f'cannot read attributes of {path}'
+    return m.group(1)[-3:], int(u.group(1)), int(u.group(2)), lbl
+def exists(img, path): return b'Inode:' in dbg(img, 'stat', path).stdout
+
+# --- ext4 edit list (debugfs -w -f) ---------------------------------------------------------------------------------------
+cmds = []; lbl = {}
+def label_file(ctx):
+    if ctx not in lbl: lbl[ctx] = tmpf('label%d' % len(lbl), ctx.encode() + b'\0')
+    return lbl[ctx]
+def put(src, dst, mode, uid=0, gid=0, ctx=SYS):
+    cmds.extend([f'rm {dst}', f'write {src} {dst}', f'set_inode_field {dst} mode 0100{mode}', f'set_inode_field {dst} uid {uid}',
+                 f'set_inode_field {dst} gid {gid}', f'ea_set -f {label_file(ctx)} {dst} security.selinux'])
+def replace(img, dst, src):
+    """new content, original owner, mode and SELinux label"""
+    m, u, g, c = attrs(img, dst); put(src, dst, m, u, g, c)
+def mkdir(path, mode='755', ctx=SYS):
+    cmds.extend([f'mkdir {path}', f'set_inode_field {path} mode 040{mode}', f'set_inode_field {path} uid 0', f'set_inode_field {path} gid 0',
+                 f'ea_set -f {label_file(ctx)} {path} security.selinux'])
+def symlink(path, target, ctx=LIB):
+    cmds.extend([f'rm {path}', f'symlink {path} {target}', f'ea_set -f {label_file(ctx)} {path} security.selinux'])
+def apply(img):
+    global cmds
+    f = tmpf('cmds', '\n'.join(cmds) + '\n'); cmds = []
+    out = subprocess.run([os.path.join(E2, 'debugfs'), '-w', '-f', f, img], capture_output=True, text=True)
+    bad = [l for l in (out.stdout + out.stderr).split('\n') if re.search(r'(?i)(error|not found|no such|not enough|no space)', l) and not l.startswith('debugfs: rm ')]
+    # `rm` of a path that does not exist yet prints "File not found by ext2_lookup": expected
+    bad = [l for l in bad if 'File not found by ext2_lookup' not in l]
+    if bad: sys.exit('debugfs reported:\n' + '\n'.join(bad[:20]))
+    run(os.path.join(E2, 'e2fsck'), '-fn', img)
+
+def apex_member(img, apex, inner, dst):
+    """copy one file out of the payload of an apex or capex stored in the image"""
+    d = wp('apx'); os.makedirs(d, exist_ok=True)
+    open(d + '/a.zip', 'wb').write(cat(img, apex)); z = zipfile.ZipFile(d + '/a.zip')
+    if 'original_apex' in z.namelist(): open(d + '/o.zip', 'wb').write(z.read('original_apex')); z = zipfile.ZipFile(d + '/o.zip')
+    open(d + '/payload.img', 'wb').write(z.read('apex_payload.img'))
+    r = dbg(d + '/payload.img', 'dump', inner, dst)
+    assert os.path.exists(dst) and os.path.getsize(dst) > 0, f'{inner} not in {apex}'
 
 # 1 ------------------------------------------------------------------------------------------------------------------
-if open(a.gsi, 'rb').read(4) == bytes.fromhex('3aff26ed'): sys.exit('sparse image: convert to raw first (simg2img)')
-shutil.copyfile(a.gsi, a.out)
+print('1 image'); GSI = a.gsi
+if open(GSI, 'rb').read(4) == bytes.fromhex('3aff26ed'): sys.exit('sparse image: convert to raw first (simg2img)')
+shutil.copyfile(GSI, a.out)
 with open(a.out, 'r+b') as f: f.truncate(PART)
-run(E('e2fsck'), '-fy', a.out, ok=(0, 1)); run(E('resize2fs'), a.out)
-run(E('e2fsck'), '-fy', '-E', 'unshare_blocks', a.out, ok=(0, 1)); run(E('e2fsck'), '-fn', a.out)
+run(os.path.join(E2, 'e2fsck'), '-fy', a.out, ok=(0, 1)); run(os.path.join(E2, 'resize2fs'), a.out)
+run(os.path.join(E2, 'e2fsck'), '-fy', '-E', 'unshare_blocks', a.out, ok=(0, 1)); run(os.path.join(E2, 'e2fsck'), '-fn', a.out)
+S = a.out                                                          # original files are read from the output image before they are replaced
 
-tmp = tempfile.mkdtemp(); cmds = []; lbl = {}
-def label_file(ctx):
-    if ctx not in lbl:
-        lbl[ctx] = os.path.join(tmp, 'l%d' % len(lbl)); open(lbl[ctx], 'wb').write(ctx.encode() + b'\0')
-    return lbl[ctx]
-def put(src, dst, mode, gid=0, ctx=SYS):
-    cmds.extend([f'rm {dst}', f'write {src} {dst}', f'set_inode_field {dst} mode 0100{mode}', f'set_inode_field {dst} uid 0',
-                 f'set_inode_field {dst} gid {gid}', f'ea_set -f {label_file(ctx)} {dst} security.selinux'])
-def mkdir(path):
-    cmds.extend([f'mkdir {path}', f'set_inode_field {path} mode 040755', f'set_inode_field {path} uid 0', f'set_inode_field {path} gid 0',
-                 f'ea_set -f {label_file(SYS)} {path} security.selinux'])
-def tmpfile(name, data):
-    p = os.path.join(tmp, name); open(p, 'wb' if isinstance(data, bytes) else 'w').write(data); return p
+# signing material for the repacked APEX files: AVB key + a JKS for apksigner. Generated per build; apexd only needs the key inside the apex to match.
+KEY, KS = wp('apex_key.pem'), wp('apex_sign.jks')
+for f in (KEY, KS):
+    if os.path.exists(f): os.remove(f)
+run('openssl', 'genrsa', '-out', KEY, '4096'); run('keytool', '-genkeypair', '-keystore', KS, '-storepass', 'android', '-keypass', 'android', '-alias', 'a17',
+                                                   '-keyalg', 'RSA', '-keysize', '2048', '-dname', 'CN=a17', '-validity', '10000')
+APEX_ENV = dict(os.environ, E2FS=E2, ZIPALIGN=os.path.join(BT, 'zipalign'), APKSIGNER=os.path.join(BT, 'apksigner'), APEX_SIGN_KS=KS)
 
-# 2 init (user build: init hard-codes "if getenforce != 1 then setenforce(1)")
-init = cat(a.out, '/system/bin/init')
-assert hashlib.sha256(init).hexdigest() == INIT_SHA, 'unexpected init build: the patch offsets would be wrong'
+# 2 init, build.prop ---------------------------------------------------------------------------------------------------
+print('2 init, build.prop')
+init = cat(S, '/system/bin/init'); assert hashlib.sha256(init).hexdigest() == INIT_SHA, 'unexpected init build: the patch offsets would be wrong'
 d = bytearray(init)
 assert d[0x103d0c:0x103d14].hex() == '00010054' + '20008052'          # b.eq skip ; mov w0,#1
 d[0x103d0c:0x103d10] = bytes.fromhex('01010054')                      # b.ne skip
 d[0x103d10:0x103d14] = bytes.fromhex('00008052')                      # mov w0,#0   -> setenforce(0) when the kernel is enforcing
-put(tmpfile('init.orig', init), '/system/bin/init.enforcing', '755'); put(tmpfile('init.p', bytes(d)), '/system/bin/init', '755', 2000, INIT_L)
+put(tmpf('init.orig', init), '/system/bin/init.enforcing', '755')
+replace(S, '/system/bin/init', tmpf('init.p', bytes(d)))
 
-# 3 build.prop
-bp = cat(a.out, '/system/build.prop').decode()
+bp = cat(S, '/system/build.prop').decode()
 for x, y in (('ro.secure=1', 'ro.secure=0'), ('ro.debuggable=0', 'ro.debuggable=1'), ('ro.force.debuggable=0', 'ro.force.debuggable=1'), ('ro.adb.secure=1', 'ro.adb.secure=0')):
     assert x in bp, x; bp = bp.replace(x, y)
-bp += '\npersist.sys.bt.unsupported.commands=182\npersist.sys.usb.config=adb\n'
+bp += '\npersist.sys.bt.unsupported.commands=182\npersist.sys.usb.config=adb\nro.hw_timeout_multiplier=5\n'   # slow device: scales AMS/Watchdog/ANR timeouts
 # the GSI ships no bluetooth.mk properties, so no profile (A2DP, HFP, HID...) is started and nothing can connect
-bp += ('\nbluetooth.device.class_of_device=90,2,12\nbluetooth.profile.a2dp.source.enabled=true\nbluetooth.profile.avrcp.target.enabled=true\n'
+bp += ("\n# Bluetooth profiles (what AOSP's bluetooth.mk sets; a GSI without it starts no profile except hearing aid). Tablet without telephony or LE Audio.\n"
+       'bluetooth.device.class_of_device=90,2,12\nbluetooth.profile.a2dp.source.enabled=true\nbluetooth.profile.avrcp.target.enabled=true\n'
        'bluetooth.profile.hfp.ag.enabled=true\nbluetooth.profile.hid.host.enabled=true\nbluetooth.profile.hid.device.enabled=true\nbluetooth.profile.gatt.enabled=true\n'
        'bluetooth.profile.bas.client.enabled=true\nbluetooth.profile.opp.enabled=true\nbluetooth.profile.pan.nap.enabled=true\nbluetooth.profile.pan.panu.enabled=true\n'
        'bluetooth.profile.asha.central.enabled=true\n')
-put(tmpfile('build.prop', bp), '/system/build.prop', '600')
+replace(S, '/system/build.prop', tmpf('build.prop', bp))
 
-# 4 VNDK v29
-vndk = cat(a.a16, '/system/system_ext/apex/com.android.vndk.v29.apex'); assert len(vndk) > 50_000_000
-put(tmpfile('vndk29.apex', vndk), '/system/system_ext/apex/com.android.vndk.v29.apex', '644')
+# 3 patched libraries --------------------------------------------------------------------------------------------------
+print('3 libc, linkers, libui, ...')
+def patched(tool, path, name):
+    """stock file -> patch tool -> work file"""
+    src = tmpf(name + '.orig', cat(S, path)); out = wp(name + '.p'); py(tool, src, out); return out
+libc64 = patched('libc/patch_libc.py', '/system/lib64/bootstrap/libc.so', 'libc64'); libc32 = patched('libc/patch_libc.py', '/system/lib/bootstrap/libc.so', 'libc32')
+ld64 = patched('libc/patch_libc.py', '/system/bin/bootstrap/linker64', 'linker64'); ld32 = patched('libc/patch_libc.py', '/system/bin/bootstrap/linker', 'linker32')
+for path, f in (('/system/lib64/bootstrap/libc.so', libc64), ('/system/lib/bootstrap/libc.so', libc32), ('/system/bin/bootstrap/linker64', ld64), ('/system/bin/bootstrap/linker', ld32),
+                ('/system/lib64/libui.so', patched('libc/patch_libui.py', '/system/lib64/libui.so', 'ui64')), ('/system/lib/libui.so', patched('libc/patch_libui.py', '/system/lib/libui.so', 'ui32')),
+                ('/system/lib64/libprocessgroup_setup.so', patched('libc/patch_pgsetup.py', '/system/lib64/libprocessgroup_setup.so', 'pgsetup')),
+                ('/system/lib64/libmeminfo.so', patched('libc/patch_libmeminfo.py', '/system/lib64/libmeminfo.so', 'meminfo')),
+                ('/system/lib64/libbinder.so', patched('libc/patch_libbinder.py', '/system/lib64/libbinder.so', 'binder')),
+                ('/system/lib64/libandroid_runtime.so', patched('libc/patch_libandroid_runtime.py', '/system/lib64/libandroid_runtime.so', 'androidrt')),
+                ('/system/framework/services.jar', patched('framework/patch_services_jar.py', '/system/framework/services.jar', 'services'))):
+    replace(S, path, f)
+# the runtime APEX carries its own copies of libc and the linkers (apps and the bionic namespace use them)
+open(wp('rt.apex'), 'wb').write(cat(S, '/system/apex/com.android.runtime.apex'))
+repl = []
+for inner, name in (('/lib64/bionic/libc.so', 'rtlibc64'), ('/lib/bionic/libc.so', 'rtlibc32'), ('/bin/linker64', 'rtlinker64'), ('/bin/linker', 'rtlinker32')):
+    apex_member(S, '/system/apex/com.android.runtime.apex', inner, wp(name + '.orig')); py('libc/patch_libc.py', wp(name + '.orig'), wp(name + '.p')); repl.append(f'{inner}={wp(name + ".p")}')
+py('apex/repack_apex.py', wp('rt.apex'), wp('rt.new.apex'), KEY, *repl, env=APEX_ENV)
+replace(S, '/system/apex/com.android.runtime.apex', wp('rt.new.apex'))
 
-# 5 SELinux mapping 29.0
+# 4 VNDK 29, SELinux mapping, cgroups -------------------------------------------------------------------------------------
+print('4 vndk 29, selinux mapping, cgroups')
+vndk = cat(a.donor, '/system/system_ext/apex/com.android.vndk.v29.apex'); assert len(vndk) > 50_000_000
+put(tmpf('vndk29.apex', vndk), '/system/system_ext/apex/com.android.vndk.v29.apex', '644')
+# the Android 10 vendor's libhwbinder looks for passthrough HALs in /system/lib64/vndk-sp-29/hw
+symlink('/system/lib64/vndk-sp-29', '/apex/com.android.vndk.v29/lib64'); symlink('/system/lib/vndk-sp-29', '/apex/com.android.vndk.v29/lib')
 defined = set()
 for p in ('/system/etc/selinux/plat_sepolicy.cil', '/system/system_ext/etc/selinux/system_ext_sepolicy.cil', '/system/product/etc/selinux/product_sepolicy.cil'):
-    t = cat(a.out, p).decode('latin1')
-    defined |= set(re.findall(r'\((?:type|typeattribute|typealias) ([A-Za-z0-9_.]+)\)', t))
+    defined |= set(re.findall(r'\((?:type|typeattribute|typealias) ([A-Za-z0-9_.]+)\)', cat(S, p).decode('latin1')))
 KW = {'and', 'or', 'not', 'xor', 'all'}
 def prune(text):
     out, dropped, stripped = [], 0, 0
@@ -97,54 +189,132 @@ def prune(text):
             if not keep: dropped += 1; continue                          # an empty list is a secilc syntax error
             if len(keep) != len(toks): stripped += 1; l = '(typeattributeset %s (%s))' % (m.group(1), ' '.join(keep))
         out.append(l)
-    print(f'mapping 29.0: {stripped} statements pruned, {dropped} dropped'); return '\n'.join(out)
-put(tmpfile('map29.cil', prune(cat(a.a16, '/system/etc/selinux/mapping/29.0.cil').decode('latin1'))), '/system/etc/selinux/mapping/29.0.cil', '644')
-# 29.0.compat.cil defines its own "vendordomain": copy unchanged. system_ext/product mappings for 29.0 are empty files.
-put(tmpfile('map29c.cil', cat(a.a16, '/system/etc/selinux/mapping/29.0.compat.cil')), '/system/etc/selinux/mapping/29.0.compat.cil', '644')
+    print(f'  mapping 29.0: {stripped} statements pruned, {dropped} dropped'); return '\n'.join(out)
+put(tmpf('map29.cil', prune(cat(a.donor, '/system/etc/selinux/mapping/29.0.cil').decode('latin1'))), '/system/etc/selinux/mapping/29.0.cil', '644')
+put(tmpf('map29c.cil', cat(a.donor, '/system/etc/selinux/mapping/29.0.compat.cil')), '/system/etc/selinux/mapping/29.0.compat.cil', '644')   # defines its own "vendordomain"
 for p in ('/system/system_ext/etc/selinux/mapping/29.0.cil', '/system/system_ext/etc/selinux/mapping/29.0.compat.cil', '/system/product/etc/selinux/mapping/29.0.cil'):
-    put(tmpfile('empty', ''), p, '644')
-
-# 6 cgroups.json
-import json
-cg = json.loads(cat(a.out, '/system/etc/cgroups.json'))
-cg['Cgroups'] = [c for c in cg['Cgroups'] if c['Controller'] != 'blkio']
+    put(tmpf('empty', ''), p, '644')
+cg = json.loads(cat(S, '/system/etc/cgroups.json'))
+cg['Cgroups'] = [c for c in cg['Cgroups'] if c['Controller'] != 'blkio']           # kernel 4.9 has no blkio controller here
 for c in cg['Cgroups2']['Controllers']:
     if c['Controller'] == 'freezer': c['Optional'] = True
-put(tmpfile('cgroups.json', json.dumps(cg, indent=2)), '/system/etc/cgroups.json', '644')
+replace(S, '/system/etc/cgroups.json', tmpf('cgroups.json', json.dumps(cg, indent=2)))
 
-# 7 EROFS APEX
-cmds.append('rm /system/apex/com.android.virt.apex')   # (debugfs has no rename; the original stays in the GSI zip)
+# 5 virt apex ------------------------------------------------------------------------------------------------------------
+print('5 virt apex (EROFS -> ext4)')
+if shutil.which('fsck.erofs'):
+    open(wp('virt.apex'), 'wb').write(cat(S, '/system/apex/com.android.virt.apex'))
+    py('apex/virt_to_ext4.py', wp('virt.apex'), wp('virt.new.apex'), KEY, env=APEX_ENV)
+    replace(S, '/system/apex/com.android.virt.apex', wp('virt.new.apex'))
+else:
+    print('  fsck.erofs (erofs-utils) not found: removing the APEX instead (the framework then lacks the virtualization jar; boot is untested that way)')
+    cmds.append('rm /system/apex/com.android.virt.apex')
 
-# 8 netbpfload
-rc = cat(a.out, '/system/etc/init/netbpfload.rc').decode()
-assert 'reboot_on_failure reboot,netbpfload-missing' in rc
-put(tmpfile('netbpfload.rc', '\n'.join(l for l in rc.split('\n') if 'reboot_on_failure reboot,netbpfload-missing' not in l)), '/system/etc/init/netbpfload.rc', '644')
+# 6 tethering / bluetooth / swcodec ------------------------------------------------------------------------------------
+print('6 bpf and friends')
+mkdir('/system/etc/bpf.a17')
+T = 'com.android.tethering.capex'; A = '/system/apex/'
+nb = wp('netbpfload.orig'); apex_member(S, A + T, '/bin/netbpfload', nb); py('bpf/patch_binaries.py', 'netbpfload', nb, wp('netbpfload.a17'))
+put(wp('netbpfload.a17'), '/system/bin/netbpfload.a17', '755', 0, 2000, 'u:object_r:bpfloader_exec:s0')
+# the tracer starts netbpfload.a17 under ptrace (children are resumed, bpf.progs_loaded is set when it ends) and is what the bind mount puts in the apex
+def zigcc(src, out):
+    zig = shutil.which('zig'); cmd = [zig] if zig else [sys.executable, '-m', 'ziglang']
+    run(*cmd, 'cc', '-target', 'aarch64-linux-musl', '-static', '-O2', '-D_GNU_SOURCE', '-o', out, src)
+zigcc(os.path.join(TOOLS, 'bpf', 'netbpfload_tracer.c'), wp('tracer')); zigcc(os.path.join(TOOLS, 'lmkd', 'lmkd_inkernel.c'), wp('lmkd'))
+put(wp('tracer'), '/system/bin/netbpfload.tracer', '755', 0, 2000, 'u:object_r:bpfloader_exec:s0')
+def bpf_file(name, apex, inner, tool, mode, ctx):
+    src = wp(name + '.orig'); apex_member(S, A + apex, inner, src); out = wp(name + '.p'); tool(src, out); put(out, '/system/etc/bpf.a17/' + name, mode, 0, 0, ctx)
+bpf_file('libnetd_updatable.so', T, '/lib64/libnetd_updatable.so', lambda i, o: py('bpf/patch_binaries.py', 'netd_updatable', i, o), '644', LIB)
+bpf_file('libservice-connectivity.so', T, '/lib64/libservice-connectivity.so', lambda i, o: py('bpf/patch_binaries.py', 'service_connectivity', i, o), '644', LIB)
+bpf_file('service-connectivity.jar', T, '/javalib/service-connectivity.jar', lambda i, o: py('framework/patch_service_connectivity_jar.py', i, o), '644', SYS)
+bpf_file('libbluetooth_jni.so', 'com.android.bt.capex', '/lib64/libbluetooth_jni.so', lambda i, o: py('bpf/patch_bluetooth.py', i, o), '644', LIB)
+bpf_file('libui_swcodec64.so', 'com.android.media.swcodec.capex', '/lib64/libui.so', lambda i, o: py('libc/patch_libui.py', i, o), '644', SYS)
+bpf_file('libui_swcodec32.so', 'com.android.media.swcodec.capex', '/lib/libui.so', lambda i, o: py('libc/patch_libui.py', i, o), '644', SYS)
+def netd(i, o): py('bpf/btfmaps.py', i, '--patch', wp('netd.btf.o')); py('bpf/patch_netd_o.py', wp('netd.btf.o'), o)       # LRU_HASH -> HASH in the BTF, then in .android_maps
+bpf_file('netd.o', T, '/etc/bpf/mainline/netd.o', netd, '644', SYS)
+for rc in ('bpf/00_bpf_bind.rc', 'bpf/00_aee_off.rc', 'zz_a17_rt.rc'): put(os.path.join(TOOLS, rc), '/system/etc/init/' + os.path.basename(rc), '644')
+rc = cat(S, '/system/etc/init/netbpfload.rc').decode(); assert 'reboot_on_failure reboot,netbpfload-missing' in rc
+replace(S, '/system/etc/init/netbpfload.rc', tmpf('netbpfload.rc', ''.join(l for l in rc.splitlines(True) if 'reboot_on_failure reboot,netbpfload-missing' not in l)))
 
-# 9 lmkd stub
-put(tmpfile('lmkd', '#!/system/bin/sh\n# Android 17 lmkd needs PSI/memcg (absent in this 4.9 kernel); it exits at once and, being critical, would reboot the tablet.\n'
-                    '# The in-kernel lowmemorykiller does the work. This stub only keeps the service and its socket alive.\nexec /system/bin/toybox sleep 2000000000\n'),
-    '/system/bin/lmkd', '755', 0, LMKD_L)
+# 7 audio ----------------------------------------------------------------------------------------------------------------
+print('7 audio')
+cl = wp('closure'); py('audio/a16_closure.py', a.donor, cl, E2)
+mkdir('/system/lib64/a16audio', ctx=LIB)
+for n in sorted(os.listdir(cl + '/lib64')):
+    f = cl + '/lib64/' + n
+    if n == 'audiopolicy-aidl-cpp.so': py('audio/patch_server_codes.py', f, wp('a16.audiopolicy.p')); f = wp('a16.audiopolicy.p')     # transaction 115 -> getPermissionController
+    if n == 'libaudiopermission.so': py('audio/patch_audiopermission.py', f, wp('a16.audiopermission.p')); f = wp('a16.audiopermission.p')
+    put(f, '/system/lib64/a16audio/' + n, '644', 0, 0, LIB)
+# Install BOTH of those patches or neither (see tools/audio/install_a16_audio.sh). A17 clients send A16's AIDL numbers:
+for lib, classes in (('audioflinger-aidl-cpp.so', 'BpAudioTrack,BpMmapStream'), ('audiopolicy-aidl-cpp.so', 'BpAudioPolicyService')):
+    src = tmpf(lib + '.a17', cat(S, '/system/lib64/' + lib)); py('audio/fix_aidl_codes.py', src, cl + '/lib64/' + lib, wp(lib + '.p'), classes)
+    replace(S, '/system/lib64/' + lib, wp(lib + '.p'))
+replace(S, '/system/bin/audioserver', cl + '/audioserver')
+rc = cat(S, '/system/etc/init/audioserver.rc').decode(); first, rest = rc.split('\n', 1); assert first.startswith('service audioserver ')
+replace(S, '/system/etc/init/audioserver.rc', tmpf('audioserver.rc', first + '\n    setenv LD_LIBRARY_PATH /system/lib64/a16audio\n' + rest))
 
-# 10 init.rc starts the UART console on debuggable builds and ActivityManager then warns "Serial console enabled, performance is impacted" every boot;
-#    start it only when persist.sys.console=1 (ROM Tuner: Serial console shell)
-rc = cat(a.out, '/system/etc/init/hw/init.rc').decode(); old = 'on init && property:ro.debuggable=1\n    start console\n'
-if old in rc: put(tmpfile('init.rc', rc.replace(old, 'on property:persist.sys.console=1\n    start console\n')), '/system/etc/init/hw/init.rc', '644')
+# 8 lmkd, lights, init.rc -------------------------------------------------------------------------------------------------
+print('8 lmkd, lights, console')
+replace(S, '/system/bin/lmkd', wp('lmkd'))
+rc = cat(S, '/system/etc/init/lmkd.rc').decode(); assert '    critical\n' in rc    # lmkd is critical: if it dies the tablet reboots
+replace(S, '/system/etc/init/lmkd.rc', tmpf('lmkd.rc', rc.replace('    critical\n', '', 1)))
+run('sh', os.path.join(TOOLS, 'lights', 'build.sh'), env=dict(os.environ, ANDROID_HOME=os.path.abspath(os.path.join(BT, '..', '..')), BUILD_TOOLS=BT))
+put(os.path.join(TOOLS, 'lights', 'out', 'lightsshim.jar'), '/system/etc/lightsshim.jar', '644')
+put(os.path.join(TOOLS, 'lights', 'lightsshim.sh'), '/system/bin/lightsshim.sh', '755'); put(os.path.join(TOOLS, 'lights', 'lightsshim.rc'), '/system/etc/init/lightsshim.rc', '644')
+# init.rc starts the UART console on debuggable builds and ActivityManager then warns "Serial console enabled, performance is impacted" every boot
+rc = cat(S, '/system/etc/init/hw/init.rc').decode(); old = 'on init && property:ro.debuggable=1\n    start console\n'; assert old in rc
+replace(S, '/system/etc/init/hw/init.rc', tmpf('init.rc', rc.replace(old, '# console shell on the UART only when asked (ROM Tuner: Serial console). ActivityManager shows a performance warning whenever init.svc.console is running.\n'
+                                                             'on property:persist.sys.console=1\n    start console\n')))
 
-# optional: ROM Tuner and boot diagnostics from the Android 16 port repo. The 'su' SELinux domain does not exist in a user-build policy.
+# 9 ROM Tuner, boot animations, optional boot diagnostics ---------------------------------------------------------------------
 R = os.path.join(a.port_repo, 'rom-tuner'); media = '/system/product/media'
-def rc_fix(path): return open(path).read().replace('u:r:su:s0', 'u:r:init:s0')
-if a.with_tuner:
+def rc_fix(path): return open(path).read().replace('u:r:su:s0', 'u:r:init:s0')      # the 'su' domain is not in this policy
+if not a.no_tuner:
+    print('9 ROM Tuner, boot animation')
+    assert os.path.exists(os.path.join(R, 'RomTuner.apk')), f'{R} is not the Android 16 port repo (--port-repo)'
     mkdir('/system/app/RomTuner'); put(os.path.join(R, 'RomTuner.apk'), '/system/app/RomTuner/RomTuner.apk', '644')
     put(os.path.join(R, 'device', 'tablet_tunerd.sh'), '/system/bin/tablet_tunerd.sh', '755')
-    put(tmpfile('tablet_tunerd.rc', rc_fix(os.path.join(R, 'device', 'tablet_tunerd.rc'))), '/system/etc/init/tablet_tunerd.rc', '644')
-    arrow = os.path.join(R, 'boot-animation', 'bootanimation-arrow.zip')
-    put(arrow, media + '/bootanimation-arrow.zip', '644'); put(arrow, media + '/bootanimation.zip', '644')
-if not a.no_bootdiag:
+    put(tmpf('tablet_tunerd.rc', rc_fix(os.path.join(R, 'device', 'tablet_tunerd.rc'))), '/system/etc/init/tablet_tunerd.rc', '644')
+    gem = os.path.join(R, 'boot-animation', 'bootanimation-gemini.zip')
+    put(os.path.join(R, 'boot-animation', 'bootanimation-arrow.zip'), media + '/bootanimation-arrow.zip', '644'); put(gem, media + '/bootanimation-gemini.zip', '644')
+    put(gem, media + '/bootanimation.zip', '644')                    # Gemini is the default, the Tuner copies the chosen one over this file
+if a.with_bootdiag:
     put(os.path.join(a.port_repo, 'debug', 'bootdiag.sh'), '/system/bin/bootdiag.sh', '755')
-    put(tmpfile('zz_bootdiag.rc', rc_fix(os.path.join(a.port_repo, 'debug', 'zz_bootdiag.rc'))), '/system/etc/init/zz_bootdiag.rc', '644')
+    put(tmpf('zz_bootdiag.rc', rc_fix(os.path.join(a.port_repo, 'debug', 'zz_bootdiag.rc'))), '/system/etc/init/zz_bootdiag.rc', '644')
 
-open(os.path.join(tmp, 'cmds'), 'w').write('\n'.join(cmds) + '\n')
-out = run(E('debugfs'), '-w', '-f', os.path.join(tmp, 'cmds'), a.out)
-if re.search(r'(?i)(error|not found|no such)', out): print('debugfs warnings:\n' + '\n'.join(l for l in out.split('\n') if re.search(r'(?i)(error|not found|no such)', l)))
-run(E('e2fsck'), '-fn', a.out)
-print('image:', a.out, os.path.getsize(a.out), 'bytes, sha256', hashlib.sha256(open(a.out, 'rb').read()).hexdigest())
+print('writing the image (debugfs)'); apply(a.out)
+
+# 10 Google apps ----------------------------------------------------------------------------------------------------------------
+def add_gapps(img):
+    """Same selection as tools/scripts/install_gapps.sh (no Setup Wizard, Velvet, Speech services, Wellbeing); the list is kept in /system/etc/gapps-installed.txt"""
+    keep_apps = ['GmsCore', 'Phonesky', 'GoogleServicesFramework', 'GooglePartnerSetup', 'GoogleCalendarSyncAdapter', 'GoogleContactsSyncAdapter', 'PrebuiltExchange3Google']
+    root = wp('gapps'); shutil.rmtree(root, ignore_errors=True); zf = zipfile.ZipFile(a.gapps); files = []
+    for i in zf.infolist():
+        p = i.filename
+        if i.is_dir() or not p.startswith(('system/product/', 'system/system_ext/')): continue
+        parts = p.split('/')
+        if len(parts) >= 5 and parts[2] in ('priv-app', 'app') and parts[3] not in keep_apps: continue
+        if parts[2] == 'overlay' and parts[-1] == 'GmsSetupWizardOverlay.apk': continue
+        if parts[2] == 'lib64': continue
+        dst = os.path.join(root, *parts[1:]); os.makedirs(os.path.dirname(dst), exist_ok=True); open(dst, 'wb').write(zf.read(i)); files.append('/system/' + '/'.join(parts[1:]))
+    loc = os.path.join(TOOLS, 'gapps', 'privapp-permissions-gms-location.xml')    # MindTheGapps whitelists no INSTALL_LOCATION_PROVIDER for Play services
+    files.append('/system/product/etc/permissions/privapp-permissions-gms-location.xml'); shutil.copyfile(loc, os.path.join(root, 'product/etc/permissions/privapp-permissions-gms-location.xml'))
+    made = set(); lst = []
+    for f in sorted(files):
+        d = os.path.dirname(f); chain = []
+        while d not in ('/system', '/') and d not in made:
+            chain.append(d); d = os.path.dirname(d)
+        for d in reversed(chain):
+            made.add(d)
+            if not exists(img, d): mkdir(d)
+        put(os.path.join(root, f[len('/system/'):]), f, '644')
+        top = '/'.join(f.split('/')[:5]) if f.split('/')[3] in ('priv-app', 'app') else f     # apps as directories, everything else file by file (etc dirs are shared)
+        if top not in lst: lst.append(top)
+    put(tmpf('gapps-installed.txt', '\n'.join(lst) + '\n'), '/system/etc/gapps-installed.txt', '644')
+    apply(img); print('  gapps:', len(files), 'files')
+if a.gapps:
+    print('10 google apps')
+    if a.out_gapps: shutil.copyfile(a.out, a.out_gapps)
+    add_gapps(a.out_gapps or a.out)
+if not a.keep_work and not a.workdir: shutil.rmtree(W, ignore_errors=True)
+for p in filter(None, (a.out, a.out_gapps)): print('image:', p, os.path.getsize(p), 'bytes')
