@@ -8,6 +8,5 @@ import struct, sys
 d = bytearray(open(sys.argv[1], 'rb').read())
 a = 0x180fc
 assert struct.unpack_from('<I', d, a)[0] == 0x12800040, 'expected mov w0,#-3 at 0x180fc'
-assert struct.unpack_from('<I', d, a - 0x1c)[0] == 0x7100413f or True
 struct.pack_into('<I', d, a, 0x2a1f03e0)
 open(sys.argv[2], 'wb').write(d); print('patched', hex(a))
