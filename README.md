@@ -80,6 +80,11 @@ gets the `INativePermissionController` through the Java `IAudioPolicyService` pr
 
 Install both patches or neither. Testing without involving `system_server`: a small `app_process` program that switches to uid 1000, fetches the controller with transaction 113 and calls the three populate methods shows exactly what the server accepts.
 
+## Boot animation after a Tuner state from Android 16
+
+ROM Tuner keeps its choice in `/data/local/tmp/tuner.state` and its daemon copies `bootanimation-<choice>.zip` over `bootanimation.zip` at every boot. A state file carried over from the Android 16 setup says `bootanim=arrow`
+and silently replaced the Gemini animation; the default only applies when the key is missing. Set `bootanim=gemini` (or choose it in the Tuner).
+
 ## Google Maps crash
 
 Maps (and any app registering an over-budget listener with the new `MemoryBudgetManager`) crashed at start with `IllegalStateException: Failed to register package budget listener`: the native register
@@ -94,8 +99,10 @@ bind-mounted from `/system/etc/bpf.a17/libui_swcodec{64,32}.so` by `00_bpf_bind.
 
 ## GPS
 
-The vendor GNSS stack works end to end: `mnld` starts, NMEA flows every second and `system_server` receives satellite status messages. Indoors there are no satellite signals (zero C/N0 reports), so no fix;
-test outdoors with the sky in view (a cold start can take several minutes; MediaTek EPO assist files are downloaded when online). `wifi_scan_always_enabled` is on for network location.
+The vendor GNSS stack works end to end (`mnld` starts, NMEA flows, `system_server` receives satellite status) and gets a fix with the sky in view (confirmed on the tablet). Indoors there are no satellite signals.
+Play services also needs `INSTALL_LOCATION_PROVIDER` for Google's network (Wi-Fi) location provider; MindTheGapps does not whitelist it, so `tools/gapps/privapp-permissions-gms-location.xml` adds it and
+`install_gapps.sh` installs the file. On an already-booted system the grant is only evaluated when the package state is rebuilt (first boot after a flash does it), so a live install may need a data wipe or reinstall of Play services to bind it.
+`wifi_scan_always_enabled` is on for network location.
 
 ## Video playback (green screen)
 
