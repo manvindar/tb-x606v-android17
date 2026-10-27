@@ -9,9 +9,13 @@ It needs a rebuilt copy because this GSI is newer than the APK's framework (`too
 3. no `SearchUiManager` service on a GSI -> the all-apps search session is skipped (`patch_search_session.py`)
 4. five staging framework resource ids moved (`remap_res_ids.py`; staging resources are numbered alphabetically)
 5. signed with the public AOSP platform test key (the GSI's platform certificate is that key) so signature permissions (`INTERNAL_SYSTEM_WINDOW`, `MANAGE_ACTIVITY_TASKS`, `READ_FRAME_BUFFER`) are granted
-6. eight more privileged permissions go into `privapp-permissions-nexuslauncher-a17.xml`. Without that file system_server aborts at boot and the tablet sits on the boot animation.
+6. `patch_desktop_mode.py`: never keep the shell's `IDesktopMode` binder (`setTaskbarIconPositionLocator` was rejected by this SystemUI)
+7. eight more privileged permissions go into `privapp-permissions-nexuslauncher-a17.xml`. Without that file system_server aborts at boot and the tablet sits on the boot animation.
 
-Not working: the NikGapps recents overlay (`PixelLauncherOverlay.apk`, makes the Pixel Launcher the recents component) black-screens the launcher, because `ISystemUiProxy.setTaskbarIconPositionLocator` has a different signature in this SystemUI. Reconciling the SystemUI/launcher AIDL interfaces would be the next step.
+Not working: gesture navigation and the Pixel recents screen. The NikGapps recents overlay (`PixelLauncherOverlay.apk`) makes the Pixel Launcher the recents component.
+With it the launcher starts, but the first app launch crashes SystemUI's shell (`RecentsTransitionHandler`: `detachNavigationBarFromApp` gets a null `IRemoteCallback`),
+because the launcher's recents/transition calls into the shell no longer match this SystemUI build. `tools/pixel/compare_aidl.py` compares AIDL codes and signatures between the two apps (SystemUI's R8-merged stubs defeat it for ISystemUiProxy).
+Expect more mismatches behind that one; each one crashes SystemUI, so it was not pursued. The overlay is therefore not installed.
 
 Install: `tools/pixel/install_pixel.sh PIXEL.apk NikGapps-full-arm64-16-*.zip`, then `cmd role add-role-holder --user 0 android.app.role.HOME com.google.android.apps.nexuslauncher`.
 Revert: `cmd role add-role-holder --user 0 android.app.role.HOME com.android.launcher3`, delete `/system/product/priv-app/NexusLauncherRelease` and the three nexuslauncher xml files.

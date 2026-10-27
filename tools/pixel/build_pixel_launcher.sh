@@ -13,6 +13,7 @@ grep -rl 'ENABLE_DESKTOP_FIRST_BASED_DEFAULT_TO_DESKTOP_BUGFIX' $W/s/smali* | xa
 grep -rl 'TaskSnapshotManager;->takeTaskSnapshot' $W/s/smali* | xargs sed -i.bak 's/TaskSnapshotManager;->takeTaskSnapshot/TaskSnapshotManager;->takeSystemTaskSnapshot/'
 # 3. no SearchUiManager service on this GSI: skip creating the all-apps search session
 python3 "$D/patch_search_session.py" $W/s
+python3 "$D/patch_desktop_mode.py" $W/s
 apktool b -f -o $W/b.apk $W/s >/dev/null
 # 4. framework resource ids that moved between the launcher's build and this GSI (see remap_res_ids.py)
 python3 "$D/remap_res_ids.py" $W/b.apk $W/r.apk 0x01050148=0x01050149 0x0105027b=0x0105027d 0x0105033a=0x0105033c 0x01050374=0x01050376 0x01050375=0x01050377
