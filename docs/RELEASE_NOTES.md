@@ -18,11 +18,11 @@ Both unpack to a raw ext4 image of 4085252096 bytes (the partition size). The Go
 
 ## What works
 Boot, GPU, Wi-Fi, Bluetooth (pairing, A2DP, HFP), audio output including apps, camera and video recording, gallery playback, YouTube with hardware H.264 and sound, brightness, keyboard, USB file transfer, Google Maps,
-Play Store (gapps image), root adb. GPS runs but needs a clear view of the sky for a fix.
+Play Store (gapps image), root adb, GPS (with sky in view).
 
 ## What does not
 Cellular (calls, SMS, mobile data: the vendor radio HAL is 1.1), USB tethering and Widevine playback are untested, SELinux boots permissive and the image is debuggable.
 
 ## Notes
-Android 16 audio libraries run privately for the audio HAL (`/system/lib64/a16audio`). `ROM Tuner` is not included in this build.
+Android 16 audio libraries run privately for the audio HAL (`/system/lib64/a16audio`). ROM Tuner (performance profiles, theme, display, serial console switch) and its root daemon are included; the Gemini boot animation is the default.
 Use at your own risk: a bad flash can need TWRP or a BROM tool to recover. See the README for every fix and its reason.
