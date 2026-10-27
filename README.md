@@ -80,6 +80,17 @@ gets the `INativePermissionController` through the Java `IAudioPolicyService` pr
 
 Install both patches or neither. Testing without involving `system_server`: a small `app_process` program that switches to uid 1000, fetches the controller with transaction 113 and calls the three populate methods shows exactly what the server accepts.
 
+## Google Maps crash
+
+Maps (and any app registering an over-budget listener with the new `MemoryBudgetManager`) crashed at start with `IllegalStateException: Failed to register package budget listener`: the native register
+functions in `libandroid_runtime.so` return 0 when the kernel cannot deliver memory budget events. `tools/libc/patch_libandroid_runtime.py` makes both natives return a dummy handle (no event ever fires).
+Replace `/system/lib64/libandroid_runtime.so` with a new file and `mv` it (never overwrite in place).
+
+## GPS
+
+The vendor GNSS stack works end to end: `mnld` starts, NMEA flows every second and `system_server` receives satellite status messages. Indoors there are no satellite signals (zero C/N0 reports), so no fix;
+test outdoors with the sky in view (a cold start can take several minutes; MediaTek EPO assist files are downloaded when online). `wifi_scan_always_enabled` is on for network location.
+
 ## Video playback (green screen)
 
 YouTube showed a green screen or "There was a problem while playing". The MediaTek OMX decoder asks for gralloc usage bit 13 (0x2000, the legacy `GRALLOC_USAGE_EXTERNAL_DISP`), and
