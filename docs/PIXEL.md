@@ -43,3 +43,8 @@ Boot hang rule: `/vendor/build.prop` has `ro.control_privapp_permissions=enforce
 An app can register under its `original-package` name (Google Clock: `com.android.deskclock`), so the allowlist needs every candidate name.
 
 Not persistent: Gboard (draws no keyboard), gesture navigation (see above), At a Glance, Pixel Weather and the Pixel clock widget (no smartspace service on the GSI), network location (see the README, the Play services APK does not request `INSTALL_LOCATION_PROVIDER`).
+
+## Performance
+Two things made the Pixel Launcher sluggish on the GE8320 (measured with `dumpsys gfxinfo`, 8 drawer open/close cycles):
+- Window blur: 72% janky frames, median 57 ms. With `persist.sysui.disableBlur=1` (set in build.prop by the builder) it is 5 to 7% janky, median 19 ms. Setting `settings put global disable_window_blurs 1` has the same effect on a running system.
+- The launcher APK ships without compiled code (`run-from-apk`), so it runs interpreted until JIT warms up. After flashing, run `tools/scripts/dexopt_on_tablet.sh` (or `cmd package compile -m speed -f com.google.android.apps.nexuslauncher`).
