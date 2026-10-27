@@ -67,9 +67,6 @@ done
 while read p; do chown -R 0:0 $p; chmod -R u=rwX,go=rX $p; chcon -R u:object_r:system_file:s0 $p; done < /data/local/tmp/gapps.list
 cat /data/local/tmp/gapps.list > /system/etc/gapps-installed.txt; chmod 644 /system/etc/gapps-installed.txt
 rm -rf /data/local/tmp/gapps /data/local/tmp/gapps.list; sync; echo installed; wc -l < /system/etc/gapps-installed.txt'
-# MindTheGapps whitelists no INSTALL_LOCATION_PROVIDER for Play services: add it, otherwise the network location provider never binds
-$ADB push "$(dirname "$0")/../gapps/privapp-permissions-gms-location.xml" /data/local/tmp/gms-loc.xml >/dev/null
-$ADB shell 'cat /data/local/tmp/gms-loc.xml > /system/product/etc/permissions/privapp-permissions-gms-location.xml; chmod 644 /system/product/etc/permissions/privapp-permissions-gms-location.xml; chcon u:object_r:system_file:s0 /system/product/etc/permissions/privapp-permissions-gms-location.xml; echo /system/product/etc/permissions/privapp-permissions-gms-location.xml >> /system/etc/gapps-installed.txt; rm /data/local/tmp/gms-loc.xml'
 rm -rf $W
 echo "Reboot to scan the new packages (the first boot takes a few minutes). Then: Settings > Accounts, and Play Store."
 [ $REBOOT = 1 ] && $ADB reboot || true

@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- MindTheGapps whitelists 374 privileged permissions for Play services but not INSTALL_LOCATION_PROVIDER, so the system never binds Google's network location provider
-     (dumpsys location: network provider enabled=false, target service=null) and there is no Wi-Fi/cell location indoors. -->
-<permissions>
-    <privapp-permissions package="com.google.android.gms">
-        <permission name="android.permission.INSTALL_LOCATION_PROVIDER"/>
-    </privapp-permissions>
-</permissions>

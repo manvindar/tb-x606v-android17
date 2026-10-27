@@ -2,7 +2,7 @@
 """Android 17 (Google aosp_arm64 GSI DP11.261002.005) -> TB-X606V system image: every change that was applied to the tested tablet, rebuilt offline.
 
 usage: build_image17.py --gsi system.img --donor LineageOS-23.2-GSI.img --out system-a17.img [--gapps MindTheGapps.zip [--out-gapps system-a17-gapps.img]]
-                        [--port-repo DIR] [--with-bootdiag] [--no-tuner]
+                        [--port-repo DIR] [--with-bootdiag] [--no-tuner] [--dolby DIR] [--pixel NikGapps-full-arm64-16.zip --pixel-launcher-apk PATCHED.apk]
 
 Inputs: the raw ext4 `system.img` from Google's GSI zip, and a LineageOS 23.2 (Android 16) GSI as donor (VNDK 29, SELinux 29.0 mapping, audioserver and its libraries).
 Everything is done offline with debugfs (no mount, runs on macOS and Linux). Steps, each one fixes a failure seen on the tablet:
@@ -18,8 +18,12 @@ Everything is done offline with debugfs (no mount, runs on macOS and Linux). Ste
    8  lmkd replacement for the in-kernel low memory killer, lights shim (brightness), RT cgroup budgets, aee off, init.rc console only on request
    9  ROM Tuner app + daemon and the Gemini boot animation (from the Android 16 port repo)
   10  optional MindTheGapps (the same file selection as tools/scripts/install_gapps.sh)
+  --dolby DIR   Dolby Atmos from your own copy of the Lenovo firmware: DaxUI.apk, daxService.patched.apk (or daxService.apk), com.dolby.daxservice.xml (not redistributable)
+  --pixel ZIP   Pixel layer (docs/PIXEL.md): Pixel Launcher (built by tools/pixel/build_pixel_launcher.sh from the APKMirror Android 17 APK, passed as --pixel-launcher-apk),
+                Wallpaper & style, sounds, Google Contacts, Calculator, Files, Calendar, Clock, plus a one-shot that makes the Pixel Launcher the home app.
+                The staged priv-apps are checked against the allowlists first: a missing entry would hang the tablet on the boot animation.
 Compiled app code (oat/odex) cannot be produced offline: see tools/scripts/dexopt_on_tablet.sh. The vendor partition needs tools/scripts/apply_vendor_a17.sh."""
-import argparse, glob, hashlib, json, os, re, shutil, subprocess, sys, tempfile, zipfile
+import argparse, contextlib, glob, hashlib, io, json, os, re, shutil, subprocess, sys, tempfile, zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__)); TOOLS = os.path.join(HERE, '..', 'tools')
 ap = argparse.ArgumentParser()
@@ -28,10 +32,14 @@ ap.add_argument('--donor', '--a16', dest='donor', required=True, help='LineageOS
 ap.add_argument('--out', required=True); ap.add_argument('--gapps', help='MindTheGapps-16.0.0-arm64 zip'); ap.add_argument('--out-gapps', help='write a second image with the Google apps (the --out image stays without)')
 ap.add_argument('--port-repo', default=os.path.join(HERE, '..', '..', 'tb-x606v-android16-port'), help='Android 16 port repo (ROM Tuner, boot animations)')
 ap.add_argument('--no-tuner', action='store_true'); ap.add_argument('--with-bootdiag', action='store_true', help='boot diagnostics service (logcat/kmsg into /data/local/tmp/bootdiag, costs performance)')
+ap.add_argument('--dolby', help='directory with DaxUI.apk, daxService.patched.apk (or daxService.apk) and com.dolby.daxservice.xml from the stock Lenovo firmware')
+ap.add_argument('--pixel', help='NikGapps-full-arm64-16-*.zip: source of the Pixel apps (Android 16 build; the launcher itself comes from --pixel-launcher-apk)')
+ap.add_argument('--pixel-launcher-apk', help='Pixel Launcher built by tools/pixel/build_pixel_launcher.sh')
 ap.add_argument('--e2fs', help='directory with debugfs, e2fsck, resize2fs, mke2fs (default: found on PATH, /sbin, Homebrew)')
 ap.add_argument('--build-tools', help='Android SDK build-tools directory (zipalign, apksigner, d8); default $ANDROID_HOME/build-tools/<newest>')
 ap.add_argument('--workdir'); ap.add_argument('--keep-work', action='store_true')
 a = ap.parse_args()
+if bool(a.pixel) != bool(a.pixel_launcher_apk): sys.exit('--pixel and --pixel-launcher-apk go together')
 
 def find_dir(tool, extra):
     for d in extra + os.environ.get('PATH', '').split(os.pathsep) + ['/sbin', '/usr/sbin', '/opt/homebrew/opt/e2fsprogs/sbin', '/usr/local/opt/e2fsprogs/sbin']:
@@ -283,6 +291,57 @@ if a.with_bootdiag:
     put(os.path.join(a.port_repo, 'debug', 'bootdiag.sh'), '/system/bin/bootdiag.sh', '755')
     put(tmpf('zz_bootdiag.rc', rc_fix(os.path.join(a.port_repo, 'debug', 'zz_bootdiag.rc'))), '/system/etc/init/zz_bootdiag.rc', '644')
 
+# 9b optional Dolby Atmos and Pixel layer ------------------------------------------------------------------------------------
+made_dirs = set(); priv_apks = []; allow_xmls = []
+def ensure_dirs(paths):
+    for f in sorted(paths):
+        d = os.path.dirname(f); chain = []
+        while d not in ('/system', '/') and d not in made_dirs:
+            chain.append(d); d = os.path.dirname(d)
+        for d in reversed(chain):
+            made_dirs.add(d)
+            if not exists(S, d): mkdir(d)
+def ls_names(path): return [l.split('/')[5] for l in dbg(S, 'ls', '-p', path).stdout.decode('latin1').splitlines() if l.count('/') >= 6 and l.split('/')[5] not in ('.', '..')]
+if a.dolby:
+    print('9b Dolby Atmos')
+    svc = next((os.path.join(a.dolby, n) for n in ('daxService.patched.apk', 'daxService.apk') if os.path.exists(os.path.join(a.dolby, n))), None)
+    for need in (os.path.join(a.dolby, 'DaxUI.apk'), os.path.join(a.dolby, 'com.dolby.daxservice.xml'), svc):
+        if not need or not os.path.exists(need): sys.exit(f'--dolby: {need} missing')
+    files = {'/system/app/DaxUI/DaxUI.apk': os.path.join(a.dolby, 'DaxUI.apk'), '/system/product/priv-app/daxService/daxService.apk': svc,
+             '/system/product/etc/permissions/com.dolby.daxservice.xml': os.path.join(a.dolby, 'com.dolby.daxservice.xml')}
+    ensure_dirs(files)
+    for dst, src in files.items(): put(src, dst, '644')
+    priv_apks.append(svc); allow_xmls.append(os.path.join(a.dolby, 'com.dolby.daxservice.xml'))
+if a.pixel:
+    print('9b Pixel layer')
+    sys.path.insert(0, os.path.join(TOOLS, 'pixel')); import stage_pixel
+    px = wp('pixel'); shutil.rmtree(px, ignore_errors=True)
+    # Gboard is left out on purpose (draws no keyboard: its modules come from Play). The Pixel Launcher recents overlay is left out too (crashes SystemUI's shell).
+    # Static overlays are only taken for the wallpaper picker and the sounds; the other packs' overlays are skipped like on the tested tablet.
+    for n in ('PixelLauncher', 'GoogleWallpaper', 'PixelThemes', 'GoogleSounds', 'GoogleContacts', 'GoogleCalculator', 'GoogleFiles', 'GoogleCalendar', 'GoogleClock', 'EmojiWallpaper'):
+        skip = tuple(k for k in stage_pixel.SKIP if k != '/overlay/') if n in ('GoogleWallpaper', 'GoogleSounds') else stage_pixel.SKIP
+        with contextlib.redirect_stdout(io.StringIO()): stage_pixel.stage(a.pixel, px, [n], skip)
+    shutil.copyfile(a.pixel_launcher_apk, px + '/priv-app/NexusLauncherRelease/NexusLauncherRelease.apk')     # replaces the Android 16 build that NikGapps ships
+    for x in ('privapp-permissions-nexuslauncher-a17.xml', 'privapp-permissions-clock-a17.xml'): shutil.copyfile(os.path.join(TOOLS, 'pixel', x), px + '/etc/permissions/' + x)
+    staged = sorted(os.path.relpath(os.path.join(r, f), px) for r, _, fs in os.walk(px) for f in fs)
+    ensure_dirs('/system/product/' + f for f in staged)
+    for f in staged: put(os.path.join(px, f), '/system/product/' + f, '644', 0, 0, LIB if f.startswith(('lib/', 'lib64/')) else SYS)
+    priv_apks += [os.path.join(px, f) for f in staged if f.startswith('priv-app/') and f.endswith('.apk')]
+    allow_xmls += [os.path.join(px, f) for f in staged if f.startswith('etc/permissions/') and f.endswith('.xml')]
+    put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
+    put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
+if priv_apks:
+    # a priv-app with a privileged permission that no allowlist grants aborts system_server at boot (boot animation forever): refuse to build it
+    print('  privileged permission allowlist check')
+    for apk in ('/system/framework/framework-res.apk', '/system/system_ext/priv-app/SystemUI/SystemUI.apk'): open(wp(os.path.basename(apk)), 'wb').write(cat(S, apk))
+    for d in ('/system/etc/permissions', '/system/product/etc/permissions', '/system/system_ext/etc/permissions'):
+        for n in ls_names(d):
+            if n.startswith('privapp-permissions') and n.endswith('.xml'): allow_xmls.append(tmpf('allow_' + n, cat(S, d + '/' + n)))
+    r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'pixel', 'check_privapp_offline.py'), '--perm-apk', wp('framework-res.apk'), '--perm-apk', wp('SystemUI.apk')]
+                       + [x for f in allow_xmls for x in ('--allow', f)] + [x for f in priv_apks for x in ('--apk', f)], capture_output=True, text=True, env=dict(os.environ, BUILD_TOOLS=BT))
+    print(r.stdout.rstrip())
+    if r.returncode: sys.exit('priv-app permissions are not allowlisted (see above): add them to an allowlist xml (check_privapp_offline.py --write-extra), or the tablet will not boot')
+
 print('writing the image (debugfs)'); apply(a.out)
 
 # 10 Google apps ----------------------------------------------------------------------------------------------------------------
@@ -298,8 +357,6 @@ def add_gapps(img):
         if parts[2] == 'overlay' and parts[-1] == 'GmsSetupWizardOverlay.apk': continue
         if parts[2] == 'lib64': continue
         dst = os.path.join(root, *parts[1:]); os.makedirs(os.path.dirname(dst), exist_ok=True); open(dst, 'wb').write(zf.read(i)); files.append('/system/' + '/'.join(parts[1:]))
-    loc = os.path.join(TOOLS, 'gapps', 'privapp-permissions-gms-location.xml')    # MindTheGapps whitelists no INSTALL_LOCATION_PROVIDER for Play services
-    files.append('/system/product/etc/permissions/privapp-permissions-gms-location.xml'); shutil.copyfile(loc, os.path.join(root, 'product/etc/permissions/privapp-permissions-gms-location.xml'))
     made = set(); lst = []
     for f in sorted(files):
         d = os.path.dirname(f); chain = []

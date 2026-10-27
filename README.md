@@ -137,9 +137,9 @@ bind-mounted from `/system/etc/bpf.a17/libui_swcodec{64,32}.so` by `00_bpf_bind.
 ## GPS
 
 The vendor GNSS stack works end to end (`mnld` starts, NMEA flows, `system_server` receives satellite status) and gets a fix with the sky in view (confirmed on the tablet). Indoors there are no satellite signals.
-Play services also needs `INSTALL_LOCATION_PROVIDER` for Google's network (Wi-Fi) location provider; MindTheGapps does not whitelist it, so `tools/gapps/privapp-permissions-gms-location.xml` adds it and
-`install_gapps.sh` installs the file. On an already-booted system the grant is only evaluated when the package state is rebuilt (first boot after a flash does it), so a live install may need a data wipe or reinstall of Play services to bind it.
-`wifi_scan_always_enabled` is on for network location.
+There is no network (Wi-Fi/cell) location. The system only uses a location provider service whose app holds `android.permission.INSTALL_LOCATION_PROVIDER`, and the Play services APK from MindTheGapps and from NikGapps does not request it in its manifest
+(`aapt2 dump permissions` lists only `LOCATION_HARDWARE` and `INSTALL_LOCATION_TIME_ZONE_PROVIDER_SERVICE`). So `dumpsys location` shows `network provider enabled=false` with `target service=null`, and logcat says `NetworkLocationService disqualified due to not holding android.permission.INSTALL_LOCATION_PROVIDER`.
+Adding the permission to a privapp allowlist does nothing for an app that does not request it (an earlier version of this repo shipped such a file; it is gone). GPS itself works with the sky in view; indoors there is no fix.
 
 ## Video playback (green screen)
 
