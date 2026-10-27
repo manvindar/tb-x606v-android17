@@ -134,3 +134,10 @@ Open: Bluetooth (com.android.bluetooth native crash), audio outputs, camera, lmk
 An unconditional `b` over the `tbz w20,#0,<assert>` branches skipped the handling of every command-status event (the stack then believed the controller had no LE or SSP
 and Settings showed address 00:00:00:00:00:00). The correct patch only retargets the failing branch to the normal exit, so a mismatching event is dropped and matching ones are handled as before.
 `dumpsys bluetooth_manager` crashes in `ControllerImpl::Dump` (debug only). Verified 2026-10-27: Bluetooth turns on, scans, pairs.
+
+## Audio (2026-10-27)
+
+Dead ends first: (a) the A17 libaudiohal@6.0 client against the 5.0 HAL, with the 6.0 stub descriptors patched to 5.0 and a vintf entry declaring 6.0: it connects and opens the device, but `AudioOffloadInfo` grew by three int32 fields in 6.0 (so `AudioConfig` is 88 bytes instead of 72), `IDevice::updateAudioPatch` and `IStreamOut::setEventCallback` etc. shift the transaction numbers, and `getSupportedFormats` returns an extra `Result`. Fixing that means rewriting the marshalling in binary. (b) A16's libaudiohal@5.0 in A17's audioserver: the C++ interface vtables differ (extra virtuals), so calls land in the wrong function.
+
+What works: Android 16's whole audio stack. `audioserver` plus the 164 libraries in its closure (script `a16_closure.py`) live in `/system/lib64/a16audio`; `audioserver.rc` gets `setenv LD_LIBRARY_PATH`. The AIDL transaction codes of three interfaces differ between the releases (IAudioPolicyService has the six volume-group methods reordered and methods inserted; IAudioTrack and IMmapStream gained methods), found by reading the `mov w1,#code` before each `transact()` in the generated `BpXxx` methods. `fix_aidl_codes.py` rewrites those in A17's `audiopolicy-aidl-cpp.so` and `audioflinger-aidl-cpp.so`. After that AudioService initialises the volume groups, `AudioOut` mixer threads open on the MediaTek HAL, and a 440 Hz `AudioTrack` plays (72000 frames delivered, ALSA stream opened).
+Open: an A2DP module ("a2dp" is not a device of the 5.0 HAL), and checking other apps.

@@ -2,7 +2,7 @@
 
 Google's Android 17 GSI (`aosp_arm64`, build DP11.261002.005) running on the Lenovo Tab M10 FHD Plus (TB-X606V, MT8768), with the stock
 Android 10 vendor image and the stock 4.9.190 kernel. It boots to a working UI. Wi-Fi, camera, brightness and the keyboard work, and
-Settings opens in under a second once the apps are compiled. Audio output does not work yet.
+Settings opens in under a second once the apps are compiled. Mobile data is untested.
 
 This repository holds the patches, helper tools and notes. It is not a turnkey build: most of the fixes were applied to a live system
 over adb and TWRP, and `build/build_image17.py` only reproduces the early part of that (see "Using this").
@@ -24,7 +24,7 @@ Companion repositories:
 | Keyboard (AOSP LatinIME) | works |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
 | Bluetooth | works: turns on, stays up, scans and pairs (audio profiles not tried, since there is no audio output yet) |
-| Audio output | not working: `audioserver` is stable but has no outputs (the HAL is 5.0, Android 17 expects newer) |
+| Audio output | works through Android 16's `audioserver` and library closure run privately (`tools/audio`); tone test plays, other apps not yet checked |
 | Mobile data and telephony | not tried |
 
 First boot is slow until the apps are compiled. The GSI ships no odex, so every app runs from its APK. Run `tools/scripts/dexopt_all.sh`
@@ -51,7 +51,7 @@ Each item came from a real failure. `docs/ANALYSIS.md` has the evidence and the 
 - **APEXes** that had to be edited are re-signed with a local AVB key and APK-signed (`tools/apex`).
 - **Timeouts.** `ro.hw_timeout_multiplier=5` stops the activity manager and SystemUI from timing out on this CPU.
 - **Vendor.** `/dev/ion` permissions, seccomp policies, ueventd (`tools/vendor`) and the fstab flags Android 17 rejects (`tools/fix_vendor_a17.py`).
-- **Audio.** Android 16's `libaudiohal@5.0` is copied in; a stub keeps `audioserver` from crashing, but there are still no outputs.
+- **Audio.** The vendor audio HAL is HIDL 5.0, which Android 17 no longer supports, and a 5.0 client from Android 16 does not fit A17's vtables (the 6.0 client has a different wire format: the offload info struct grew and methods were inserted). So `audioserver` and its roughly 164 libraries come from Android 16 and run from `/system/lib64/a16audio` through `LD_LIBRARY_PATH`. A17's clients differ in a few AIDL transaction numbers, so `tools/audio/fix_aidl_codes.py` rewrites them in the two A17 AIDL libs.
 - **Low memory killer.** The Android 17 `lmkd` needs PSI or memcg, which 4.9 does not have. The idle stub that replaced it never listened on its socket, and the
   activity manager then slept and retried on every process change, which blocked it for seconds and made the watchdog restart `system_server`. The replacement
   speaks the lmkd protocol and drives the old in-kernel killer.
