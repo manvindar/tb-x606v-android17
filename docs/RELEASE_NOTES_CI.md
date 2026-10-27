@@ -15,7 +15,8 @@ Everything the tablet needed, found and fixed on the tablet itself: the Android 
 - **Speed:** window blur off (`persist.sysui.disableBlur`), the USAP process pool on, `traced` off, and a first-boot job that compiles the apps (below).
 - **ROM Tuner, redesigned:** a preset dial (Battery to Extreme), live CPU, GPU, memory clock, free RAM and temperature, saved profiles, a Picture section for MediaTek MiraVision (sharpness is off by default, it made video look worse), and a Widevine readout under System.
 - **Real device identity:** the tablet reports Lenovo TB-X606V instead of "AOSP on ARM64" (streaming apps choose their quality by model).
-- **Network location patch** for `services.jar` (Play services' provider now binds; Wi-Fi location still needs Google's module; GPS needs a clear sky).
+- **Network location:** the `services.jar` patch lets Play services' provider bind, and the first-boot job sets its location app ops and opt-in, so Wi-Fi positioning returns fixes (a fix indoors in 20 seconds on the tablet). GPS needs a clear sky.
+- **Chrome works:** Android 17 starts Chrome's renderer through a native zygote that needs `clone3` and capability numbers kernel 4.9 lacks. `libc` now carries two small stubs for that (`tools/libc/patch_libc.py`, see the README).
 - **Dolby support in the installer:** the vendor edits now also remove the `deep_buffer` audio output, which is what made Dolby inaudible (Dolby's effect sits on the primary output only). Dolby Atmos itself is not in the image.
 
 ## Compiled apps

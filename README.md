@@ -66,6 +66,7 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 | eBPF loader, `netd`, ConnectivityService | works (patched binaries and jars bind-mounted over the APEX copies) |
 | GPU, SurfaceFlinger, SystemUI, launcher, Settings | works |
 | Wi-Fi | connects and stays connected |
+| Network location (Wi-Fi positioning) | works (services.jar patch plus the Play services opt-in, see "GPS") |
 | Camera | works (video encoding untested; the MediaTek encoders log "unsupported parameter") |
 | Brightness | works, through a Java AIDL lights shim (`tools/lights`) |
 | Keyboard (AOSP LatinIME) | works |
@@ -150,7 +151,14 @@ bind-mounted from `/system/etc/bpf.a17/libui_swcodec{64,32}.so` by `00_bpf_bind.
 
 The vendor GNSS stack works end to end (`mnld` starts, NMEA flows, `system_server` receives satellite status) and gets a fix with the sky in view (confirmed on the tablet). Indoors there are no satellite signals.
 Network (Wi-Fi/cell) location needs one patch. The system only uses a location provider service whose app holds `android.permission.INSTALL_LOCATION_PROVIDER`, and the Play services APK from MindTheGapps and NikGapps does not request it in its manifest (`aapt2 dump permissions` lists only `LOCATION_HARDWARE` and `INSTALL_LOCATION_TIME_ZONE_PROVIDER_SERVICE`). So `dumpsys location` showed `network provider enabled=false`, `target service=null`, and logcat said `NetworkLocationService disqualified due to not holding android.permission.INSTALL_LOCATION_PROVIDER`.
-An allowlist entry cannot fix that, because the app never asks for the permission. `tools/framework/patch_location_provider.py` patches the two `ProxyLocationProvider` constructors in `services.jar` to pass no service permission, after which `ServiceWatcher: [network] connected to {com.google.android.gms/.../NetworkLocationService}` appears and the provider is enabled. The cost is that any app declaring a network location provider service can qualify, which is fine for a personal tablet. The builder applies it. Play services also needs to fetch its location module from Google before Wi-Fi location returns fixes (`NlpInternalApi: failed to send request to NLP - not found` until then). GPS itself works with the sky in view.
+An allowlist entry cannot fix that, because the app never asks for the permission. `tools/framework/patch_location_provider.py` patches the two `ProxyLocationProvider` constructors in `services.jar` to pass no service permission, after which `ServiceWatcher: [network] connected to {com.google.android.gms/.../NetworkLocationService}` appears and the provider is enabled. The cost is that any app declaring a network location provider service can qualify, which is fine for a personal tablet. The builder applies it. The provider then still returned nothing, with `NlpInternalApi: failed to send request to NLP - not found` in the log and, next to it in the activity manager, `Appop Denial: Accessing service ...GoogleLocationService from pid=..., uid=10063 requires appop COARSE_LOCATION`.
+Without the setup wizard, Play services' own location app ops were on "ignore" and the Google location opt-in was unset, so its network location service refused its own requests. Resetting the app ops and setting the opt-in fixed it (the first fix came 20 seconds later, indoors, 12 m accuracy):
+```sh
+adb shell 'for p in ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION ACCESS_BACKGROUND_LOCATION NEARBY_WIFI_DEVICES; do pm grant com.google.android.gms android.permission.$p; done
+appops reset com.google.android.gms; for o in COARSE_LOCATION FINE_LOCATION NEARBY_WIFI_DEVICES; do appops set --uid com.google.android.gms $o allow; done
+settings put secure google_location_accuracy_enabled 1; settings put secure network_location_opt_in 1; settings put global network_location_opt_in 1'
+```
+The first-boot job (`tools/firstboot/firstboot_dexopt.sh`) now does this once when Play services is installed. GPS itself works with the sky in view.
 
 ## Video playback (green screen)
 
