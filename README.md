@@ -11,6 +11,16 @@ Companion repositories:
 - [`tb-x606v-kernel`](https://github.com/manvindar/tb-x606v-kernel): the 4.9 kernel patches and CI build. The final setup does not use it (see below).
 - [`tb-x606v-android16-port`](https://github.com/manvindar/tb-x606v-android16-port): the Android 16 build for this tablet, the known good fallback. It uses the same Gemini boot animation by default.
 
+## Screenshots
+
+| Settings | Quick settings | About phone |
+|---|---|---|
+| ![Settings](docs/screenshots/settings.png) | ![Quick settings](docs/screenshots/quick-settings.png) | ![About phone](docs/screenshots/about.png) |
+
+| Home | Bluetooth (Bose QC 45 connected) |
+|---|---|
+| ![Home](docs/screenshots/home.png) | ![Bluetooth](docs/screenshots/bluetooth.png) |
+
 ## Status (2026-10-27)
 
 | Area | State |
