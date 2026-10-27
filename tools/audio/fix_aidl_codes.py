@@ -41,12 +41,14 @@ def transact_movs(d, cls):
             if x.mnemonic == 'blr' and last: res[meth] = last; break
     return res
 
+# getMmapPolicyForDevice's A16 number (115) is taken over by patch_server_codes.py for getPermissionController: report it as unsupported (200)
+OVERRIDE = {'getMmapPolicyForDevice'}
 lib17, lib16, out, classes = sys.argv[1:5]
 d17 = bytearray(open(lib17, 'rb').read()); d16 = open(lib16, 'rb').read()
 for cls in classes.split(','):
     a = transact_movs(bytes(d17), cls); b = transact_movs(d16, cls); n = 0
     for meth, (off, code17) in a.items():
-        code16 = b[meth][1] if meth in b else 200
+        code16 = 200 if meth in OVERRIDE else (b[meth][1] if meth in b else 200)
         if code16 != code17:
             struct.pack_into('<I', d17, off, 0x52800001 | (code16 << 5)); n += 1
     print(cls, len(a), 'methods,', n, 'renumbered,', [m for m in a if m not in b], 'only in A17')

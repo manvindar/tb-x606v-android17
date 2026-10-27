@@ -10,5 +10,10 @@
 #       python3 fix_aidl_codes.py audiopolicy-aidl-cpp.so(A17) audiopolicy-aidl-cpp.so(A16) OUT BpAudioPolicyService
 #       python3 fix_aidl_codes.py audioflinger-aidl-cpp.so(A17) audioflinger-aidl-cpp.so(A16) OUT BpAudioTrack,BpMmapStream
 #     and install the two outputs over /system/lib64 (originals kept as *.a17orig outside the lib dir).
+#  3b. Apps' AudioTracks also need the audio permission controller to be populated by system_server (A17's AudioService does it through the Java IAudioPolicyService proxy, which
+#     sends A17's number 115 for getPermissionController; A16 uses 113, and A16's 115 is something else). Patch the private A16 libs:
+#       python3 patch_server_codes.py a16audio/audiopolicy-aidl-cpp.so OUT      (jump table: code 115 -> the getPermissionController handler)
+#       python3 patch_audiopermission.py a16audio/libaudiopermission.so OUT      (populatePermissionState accepts A17's larger enum instead of throwing)
+#     Install BOTH or neither: with only the first, populate throws inside system_server and the tablet boot-loops on the boot animation (needs TWRP to undo).
 #  4. reboot. Test: ToneTest.java (javac + d8, `CLASSPATH=tone.jar app_process /system/bin Tone`) plays 3 s of 440 Hz.
 echo "see the comments; the steps are manual on purpose"

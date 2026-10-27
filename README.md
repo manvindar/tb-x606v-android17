@@ -34,9 +34,9 @@ Companion repositories:
 | Keyboard (AOSP LatinIME) | works |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
 | Bluetooth | works: turns on, scans, pairs, and connects (HFP and A2DP with a Bose QC 45; the A2DP stream starts and stops with playback) |
-| Audio output | works through Android 16's `audioserver` and library closure run privately (`tools/audio`); a 440 Hz test tone plays, other apps not yet checked |
+| Audio output | works (also in apps, YouTube plays with sound) through Android 16's `audioserver` and library closure run privately (`tools/audio`) |
 | Google apps | install script works (Play Store runs) |
-| YouTube playback | works (hardware H.264; the vendor VP9 entry is removed); needed the `libui` usage-bit patch |
+| YouTube playback | works with sound, 720p and up (hardware H.264; the vendor VP9 entry is removed); needed the `libui` usage-bit patch |
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
 | Cellular (calls, SMS, mobile data) | not working, see below |
 | USB file transfer | works (checked with libmtp); tethering untested |
@@ -68,6 +68,17 @@ The default is the Pixel 10 Gemini animation from [docbt/GeminiBootAnimation](ht
 `tools/boot-animation/make_gemini_fit.py` scales it to the 1200x1920 panel, centres it on black and reduces it to a 128-colour palette (13 MB, stored zip). Install it as
 `/system/product/media/bootanimation.zip`. Other candidates that were previewed: ArrowOS (the leftover from the Android 16 customisation), a generated galaxy, the Lineage original,
 and Pixel-style and Lenovo Yoga Smart Tab animations from the [Android Boot Animation Collection](https://github.com/tntapple219/Android-Boot-Animation-Collection) (unlicensed, not included).
+
+## App audio (no sound in apps)
+
+The 440 Hz test tone from a shell process played, but apps (YouTube) had no sound: `NPC::validatedUidPackagePair: controller never populated by system_server`. Android 17's `AudioService`
+gets the `INativePermissionController` through the Java `IAudioPolicyService` proxy and fills it with the uid and package list. Two version differences broke that:
+
+1. The Java proxy (in `framework.jar`, boot classpath) sends transaction 115 for `getPermissionController`; in Android 16 that number is `getMmapPolicyForDevice` and the controller is 113. The failure was silent because the
+   start task runs on an executor. `tools/audio/patch_server_codes.py` points table entry 115 of A16's `BnAudioPolicyService::onTransact` jump table at the 113 handler (the table sits at the address `adr` loads, not at `pc + imm`; the first attempt wrote the wrong place and had no effect).
+2. Once the controller is reachable, `populatePermissionState` rejects the A17 permission enum (A16 knows 16 values) with `EX_ILLEGAL_ARGUMENT`, and the exception on the `audioserver_lifecycle` thread kills `system_server`: boot loop, boot animation forever, no adb. `tools/audio/patch_audiopermission.py` makes it return success.
+
+Install both patches or neither. Testing without involving `system_server`: a small `app_process` program that switches to uid 1000, fetches the controller with transaction 113 and calls the three populate methods shows exactly what the server accepts.
 
 ## Video playback (green screen)
 

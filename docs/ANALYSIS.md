@@ -141,3 +141,10 @@ Dead ends first: (a) the A17 libaudiohal@6.0 client against the 5.0 HAL, with th
 
 What works: Android 16's whole audio stack. `audioserver` plus the 164 libraries in its closure (script `a16_closure.py`) live in `/system/lib64/a16audio`; `audioserver.rc` gets `setenv LD_LIBRARY_PATH`. The AIDL transaction codes of three interfaces differ between the releases (IAudioPolicyService has the six volume-group methods reordered and methods inserted; IAudioTrack and IMmapStream gained methods), found by reading the `mov w1,#code` before each `transact()` in the generated `BpXxx` methods. `fix_aidl_codes.py` rewrites those in A17's `audiopolicy-aidl-cpp.so` and `audioflinger-aidl-cpp.so`. After that AudioService initialises the volume groups, `AudioOut` mixer threads open on the MediaTek HAL, and a 440 Hz `AudioTrack` plays (72000 frames delivered, ALSA stream opened).
 Open: an A2DP module ("a2dp" is not a device of the 5.0 HAL), and checking other apps.
+
+## App audio (2026-10-27, evening)
+
+See the README section "App audio". Short form: system_server's Java `getPermissionController` proxy sends A17's code 115, A16's server has it at 113 (and 115 is `getMmapPolicyForDevice`); fixed in the private A16
+`audiopolicy-aidl-cpp.so` jump table (`patch_server_codes.py`) and `fix_aidl_codes.py` now reports `getMmapPolicyForDevice` as unsupported (code 200). Then `populatePermissionState` throws for enum values >= 16, which
+crashes system_server through an uncaught exception on the `audioserver_lifecycle` thread; `patch_audiopermission.py` returns success. Lesson: when changing what system_server talks to, test the calls from an `app_process`
+helper running as uid 1000 first; a wrong server reply there does not boot-loop the tablet. YouTube now plays with sound at 720p.
