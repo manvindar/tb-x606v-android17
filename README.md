@@ -234,3 +234,5 @@ Flashing wipes userdata. Do not touch `recovery`. The scripts and patchers in `t
 
 Google's GSI, the Lenovo stock images and the vendor files are not included, and the patchers read them from your own copies. The Android and Lenovo files belong to their owners.
 This is a personal experiment with no warranty: it can leave the tablet unbootable.
+
+Performance notes (what made it fast, what did not): [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
