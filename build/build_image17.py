@@ -245,7 +245,7 @@ bpf_file('libui_swcodec64.so', 'com.android.media.swcodec.capex', '/lib64/libui.
 bpf_file('libui_swcodec32.so', 'com.android.media.swcodec.capex', '/lib/libui.so', lambda i, o: py('libc/patch_libui.py', i, o), '644', SYS)
 def netd(i, o): py('bpf/btfmaps.py', i, '--patch', wp('netd.btf.o')); py('bpf/patch_netd_o.py', wp('netd.btf.o'), o)       # LRU_HASH -> HASH in the BTF, then in .android_maps
 bpf_file('netd.o', T, '/etc/bpf/mainline/netd.o', netd, '644', SYS)
-for rc in ('bpf/00_bpf_bind.rc', 'bpf/00_aee_off.rc', 'zz_a17_rt.rc', 'zz_a17_perf.rc'): put(os.path.join(TOOLS, rc), '/system/etc/init/' + os.path.basename(rc), '644')
+for rc in ('bpf/00_bpf_bind.rc', 'bpf/00_aee_off.rc', 'zz_a17_rt.rc'): put(os.path.join(TOOLS, rc), '/system/etc/init/' + os.path.basename(rc), '644')
 rc = cat(S, '/system/etc/init/netbpfload.rc').decode(); assert 'reboot_on_failure reboot,netbpfload-missing' in rc
 replace(S, '/system/etc/init/netbpfload.rc', tmpf('netbpfload.rc', ''.join(l for l in rc.splitlines(True) if 'reboot_on_failure reboot,netbpfload-missing' not in l)))
 
