@@ -8,7 +8,7 @@
 #   5. media_codecs_mediatek_video.xml without the software-only OMX.MTK.VIDEO.DECODER.VP9 (YouTube then uses hardware H.264)
 #   6. AIDL lights HAL declaration for the brightness shim (/vendor/etc/vintf/manifest/android.hardware.light-aidl.xml)
 set -e
-ADB=${ADB:-$HOME/Library/Android/sdk/platform-tools/adb}; D=$(cd "$(dirname "$0")/.." && pwd)
+ADB=${ADB:-$(command -v adb || echo $HOME/Library/Android/sdk/platform-tools/adb)}; D=$(cd "$(dirname "$0")/.." && pwd)
 $ADB devices | grep -q recovery || { echo "put the tablet in TWRP first"; exit 1; }
 python3 $D/fix_vendor_a17.py "$ADB"
 $ADB shell 'mkdir -p /mnt/v2; umount /mnt/v2 2>/dev/null; mount -t ext4 -o rw /dev/block/by-name/vendor /mnt/v2'

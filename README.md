@@ -11,11 +11,43 @@ Companion repositories:
 - [`tb-x606v-kernel`](https://github.com/manvindar/tb-x606v-kernel): the 4.9 kernel patches and CI build. The final setup does not use it (see below).
 - [`tb-x606v-android16-port`](https://github.com/manvindar/tb-x606v-android16-port): the Android 16 build for this tablet, the known good fallback. It uses the same Gemini boot animation by default.
 
-## Images
+## Install the prebuilt image
 
-Prebuilt system images (a dump of the tested partition, with and without the Google apps) are attached to the [first release](https://github.com/manvindar/tb-x606v-android17/releases/tag/v17-dp11-r1), with install steps in `docs/RELEASE_NOTES.md`:
-`tools/scripts/flash_a17.sh` flashes the image, `tools/scripts/apply_vendor_a17.sh` applies the vendor changes from TWRP once, `tools/scripts/dexopt_all.sh` makes it fast. The images contain Google's Android 17 GSI
-(and, in the gapps image, Google's apps); they carry Google's terms, not this repository's licence. Dolby Atmos (Lenovo and Dolby software) is not in them.
+Images are on the [Releases page](https://github.com/manvindar/tb-x606v-android17/releases): `system-a17-tb-x606v-gapps.img.xz` (with Google apps) or `...-nogapps.img.xz`. They are dumps of the tested
+partition with the main system apps already compiled, so the first boot is not slow. They contain Google's Android 17 GSI (and Google's apps in the gapps image), under Google's terms. Dolby Atmos is not in them.
+
+**You need (once):** a TB-X606V on the stock Android 10 firmware (tested on `TB-X606V_USR_S300665_2206300345_V9.56_BMP_ROW`), an unlocked bootloader, TWRP in the recovery partition, USB debugging on,
+and Android platform-tools (`adb`, `fastboot`) and `xz` on the computer. Flashing erases all data on the tablet.
+
+```sh
+git clone https://github.com/manvindar/tb-x606v-android17 && cd tb-x606v-android17
+# 1. backup (tablet in TWRP: hold Volume Up + Volume Down while it starts)
+tools/scripts/backup_partitions.sh
+# 2. install: unpacks the image, flashes it, applies the vendor changes through TWRP, reboots
+tools/scripts/install_a17.sh ~/Downloads/system-a17-tb-x606v-gapps.img.xz
+```
+
+`install_a17.sh` does everything below; the manual version is here in case you prefer to type it yourself:
+
+| Step | Command | Why |
+|---|---|---|
+| bootloader | `adb reboot bootloader` (or power off, hold Power + Volume Down) | |
+| vbmeta | `fastboot --disable-verity --disable-verification flash vbmeta tools/vbmeta/vbmeta-disabled.img` | switches Android Verified Boot verification off |
+| system | `fastboot flash system system-a17-tb-x606v-gapps.img` | the image (unpack the `.xz` first: `xz -dk file.img.xz`) |
+| wipe | `fastboot format:ext4 userdata; fastboot erase metadata; fastboot erase cache` | Android 17 needs an unencrypted, freshly formatted `/data` |
+| vendor | `fastboot reboot recovery`, then `tools/scripts/apply_vendor_a17.sh` | edits the vendor partition once (see below) |
+| boot | `adb reboot` | the first boot takes several minutes |
+
+**vbmeta.** This tablet's stock `vbmeta` already has the verification-disabled flag set (flags = 2; the bootloader state shows `orange` when it is unlocked), so on the tested tablet the vbmeta step changes nothing. It is there
+because other firmware builds may not ship it that way, the same step other TB-X606F ROM threads ask for, and a modified system partition will not boot under verified boot. `tools/vbmeta/vbmeta-disabled.img` is a 4 KB
+empty vbmeta with the verification-disabled flag (made with `avbtool make_vbmeta_image --flags 2`); skip it with `--no-vbmeta` if you want to leave your own vbmeta alone. Never touched by any script: `recovery`, `boot`, `lk`,
+`nvram`, `nvdata`, `proinfo`, `persist` and every other partition (so TWRP and your IMEI/MAC data stay as they are).
+
+**Vendor edits** (`apply_vendor_a17.sh`, once, from TWRP; originals are saved as `*.orig-a17`/`*.orig-mp2`/`*.orig-vp9`): the fstab legacy flags Android 17 rejects and a `/metadata` line, `ueventd.rc` with `/dev/ion` opened,
+seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed from the codec lists, and the AIDL lights declaration for the brightness shim.
+
+**Going back:** flash your backup (`fastboot flash system system.img` from the Android 10 firmware or from `backup_partitions.sh`, plus `vendor.img` if you want the vendor files back exactly) and wipe data.
+`tools/restore_stock_boot.md` covers a tablet that no longer reaches the bootloader. After a flash, `tools/scripts/dexopt_all.sh` is only needed for apps you install later.
 
 ## Screenshots
 
