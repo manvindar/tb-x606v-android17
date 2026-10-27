@@ -58,3 +58,31 @@ The OSS kernel (4.9.117) does not match the stock vendor userland (built for 4.9
   (null IMemory from the hidl allocator). Not yet analysed.
 Android 16 worked because it ran on the stock kernel. Each of these needs an ABI shim in the kernel or a switch back to the stock kernel with the
 MADV_WIPEONFORK / cgroup2 / cpuset_v2_mode backports applied some other way.
+
+## Switch to the stock kernel (2026-10-27)
+
+The Lenovo OSS kernel (4.9.117) cannot drive this tablet's GPU: its PowerVR driver rejects the vendor `rgx.fw` (`BVNC_MISMATCH`, compat struct 2 vs
+16777216), because kernel driver, firmware and userspace come from one PowerVR release and the OSS tree has an older one. So Android 17 now runs on the
+stock 4.9.190 boot image (`work/kernel/stock/boot.img`, flashed to `boot` only) and the userspace is patched for it.
+
+Kernel-side gaps of the stock kernel and their userspace fixes (scripts under `tools/`):
+- `MADV_WIPEONFORK`: bionic's arc4random aborts when madvise(18) fails. It exists in libc **and statically in the linkers** (bootstrap `linker`/`linker64`
+  and the runtime apex ones). `tools/libc/patch_libc.py` NOPs the failure branch in all of them (arm64 and thumb-2, found by pattern).
+- cgroup2 rejects any mount data on 4.9, cpuset has no `cpuset_v2_mode`: `tools/libc/patch_pgsetup.py` passes NULL data and uses `clone_children`.
+- the runtime apex lives in the signed apex, so `tools/apex/repack_apex.py` replaces files in the ext4 payload (extent-aware, in place), re-signs the
+  AVB hashtree with our key (new `apex_pubkey`), page-aligns the zip entries and signs the zip as an APK (PackageManager checks it). **Alignment matters:**
+  `apksigner` without `--alignment-preserved true` moves `apex_payload.img` off its 4096 boundary and the tablet restarts before the boot animation.
+- `com.android.virt.apex` is EROFS (no EROFS in 4.9) but the framework still references its jar: converted to ext4 and re-signed the same way.
+- Android 17's ueventd ignores `/vendor/ueventd.rc`: `tools/vendor/make_vendor_ueventd.sh`.
+- Android 17's `libui` only falls back to the HIDL gralloc mappers when `android_get_device_api_level() <= 35`: `tools/libc/patch_libui.py`.
+- vendor seccomp policies lack `gettid` (Android 17 libc/libhidl call it): `tools/vendor/seccomp_add.sh`.
+- no AIDL IPower HAL: `HintManagerService` dies on a null `SupportInfo`. `tools/framework/patch_services_jar.py` patches the bytecode (catch NPE, build the
+  default all-unsupported SupportInfo). The patch must keep register `v6` (`this`) unclobbered inside the try range or ART's verifier rejects the class.
+
+Debugging aids: `tools/bootdiag.sh` (logs to /data/local/tmp/bootdiag; probes go to logcat tag DIAG, because redirecting toolbox output to files gave
+empty files), `tools/pulllog.sh N`, `tools/bpf/netbpfload_tracer.c` (also still wraps netbpfload), zig for cross-compiling test binaries.
+
+### State at the end of this session
+Boots to the boot animation with `system_server` running (PackageManager scans 164 packages, services start). Open: the vendor audio HAL is 5.0 and
+Android 17 has no `libaudiohal@5.0` (`audioserver` crashes in `AudioFlinger::onFirstRef`), `pq-2-2` crashes on the HIDL shared-memory mapper, and the
+first full boot with the fixed services.jar has not been observed yet.
