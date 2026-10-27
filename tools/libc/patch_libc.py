@@ -67,5 +67,6 @@ def patch_clone3(d):
     struct.pack_into('<I', d, site + 12, 0x94000000 | (((cave - (site + 12)) >> 2) & 0x3ffffff))
     return site, cave
 
-if d[4] == 2: print('clone3 stub', [hex(x) for x in patch_clone3(d)])
+if d[4] == 2 and d.find(struct.pack('<3I', 0x52803660, 0xaa1503e1, 0xaa1403e2)) > 0:   # libc.so only; the linkers embed the madvise code but have no clone3
+    print('clone3 stub', [hex(x) for x in patch_clone3(d)])
 open(sys.argv[2], 'wb').write(d); print('patched', hex(hits[0]), '->', sys.argv[2])
