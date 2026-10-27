@@ -4,8 +4,7 @@ Google's Android 17 GSI (`aosp_arm64`, build DP11.261002.005) running on the Len
 Android 10 vendor image and the stock 4.9.190 kernel. It boots to a working UI. Wi-Fi, Bluetooth, audio, camera, brightness and the keyboard work, and
 Settings opens in under a second once the apps are compiled. Cellular, USB mode switching and DRM playback do not work (see "Known issues").
 
-This repository holds the patches, helper tools and notes. It is not a turnkey build: most of the fixes were applied to a live system
-over adb and TWRP, and `build/build_image17.py` only reproduces the early part of that (see "Using this").
+This repository holds the patches, helper tools and notes, and `build/build_image17.py` rebuilds the whole system image from public inputs (see "Build the image yourself").
 
 Companion repositories:
 - [`tb-x606v-kernel`](https://github.com/manvindar/tb-x606v-kernel): the 4.9 kernel patches and CI build. The final setup does not use it (see below).
@@ -199,14 +198,30 @@ Each item came from a real failure. `docs/ANALYSIS.md` has the evidence and the 
 - **Bluetooth** (`tools/bpf/patch_bluetooth.py`): the controller answers an optional command with an unknown-command status that the stack treats as fatal, and
   then a check for Secure Simple Pairing aborts. Both branches are patched.
 
-## Using this
+## Build the image yourself
+
+`build/build_image17.py` turns Google's GSI into the tested image offline, with debugfs (no mount, runs on macOS and Linux). It applies every patch in `tools/` (libc and linkers, libui, libbinder, services.jar, the BPF
+and Bluetooth binaries, the repacked runtime and virt APEXes, the Android 16 audio stack, lmkd, the lights shim, ROM Tuner and the Gemini boot animation, init and rc files) and optionally MindTheGapps.
+It needs: e2fsprogs, python3 with `capstone`, zig (`pip install ziglang` also works), a JDK and the Android SDK (`build-tools;35.0.0`, `platforms;android-34`), openssl, zip, `erofs-utils` (`fsck.erofs`), and about 20 GB of disk.
+```sh
+# inputs: system.img from Google's GSI zip (DP11.261002.005, raw ext4), the LineageOS 23.2 GSI (.img), MindTheGapps-16.0.0-arm64 zip, and the Android 16 port repo next to this one
+python3 build/build_image17.py --gsi system.img --donor LineageOS-23.2-GSI.img --out system-a17-nogapps.img \
+    --gapps MindTheGapps-16.0.0-arm64.zip --out-gapps system-a17-gapps.img --port-repo ../tb-x606v-android16-port
+python3 build/verify_image.py system-a17-nogapps.img other.img          # file by file comparison (mode, owner, label, sha256)
+```
+The same build runs on GitHub Actions (`.github/workflows/build-image.yml`, Actions tab, "Run workflow"; tick `publish` to attach the images to a release). It produces `*-nodexopt.img.xz` files:
+the images have **no compiled app code** because `dex2oat` needs a booted tablet. After the first boot run `tools/scripts/dexopt_on_tablet.sh` once (10 to 15 minutes). The `v17-dp11-r*` releases are dumps of a tested tablet and are already compiled.
+Install the result like any other image (`tools/scripts/install_a17.sh`). The vendor edits are a separate step (`apply_vendor_a17.sh`, done by the installer).
+
+How well the builder matches the tested tablet image: `verify_image.py` finds every file identical (including the repacked APEX payloads) except the compiled app code, files that were only backups or experiments on the tablet
+(`*.a17orig`, `*.orig-a17`, the unused Android 5.0 audio HAL leftovers), Dolby, the two zig-built helpers (`lmkd`, `netbpfload.tracer`: same source, different compiler output), the lights jar (zip timestamps) and `/system/build.prop`,
+which now also has `persist.traced.enable=0`. The boot diagnostics service is off unless you pass `--with-bootdiag`.
+
+## Using the tools one by one
 
 You need a TB-X606V with an unlocked bootloader, TWRP in `recovery`, `adb` and `fastboot`, e2fsprogs, and **a backup of the stock `boot` partition**.
-Flashing wipes userdata. Do not touch `recovery`.
-
-`build/build_image17.py` builds the patched system image from the GSI and an Android 16 image (for the VNDK 29 APEX and SELinux mapping). The later fixes were
-applied live: after the image boots, run the scripts and patchers in `tools/` (the bind-mounted files go to `/system/etc/bpf.a17/`, the init rc files to
-`/system/etc/init/`), then `tools/scripts/dexopt_all.sh`. If you try this, expect to read `docs/ANALYSIS.md`.
+Flashing wipes userdata. Do not touch `recovery`. The scripts and patchers in `tools/` can also be applied to a live system over adb (the bind-mounted files go to `/system/etc/bpf.a17/`, the init rc files to
+`/system/etc/init/`). If you try that, expect to read `docs/ANALYSIS.md`.
 
 `tools/restore_stock_boot.md` explains how to recover a tablet that no longer reaches TWRP or fastboot (MediaTek BROM with mtkclient).
 
