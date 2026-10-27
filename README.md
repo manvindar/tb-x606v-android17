@@ -1,15 +1,15 @@
 # Android 17 on the Lenovo TB-X606V
 
 Google's Android 17 GSI (`aosp_arm64`, build DP11.261002.005) running on the Lenovo Tab M10 FHD Plus (TB-X606V, MT8768), with the stock
-Android 10 vendor image and the stock 4.9.190 kernel. It boots to a working UI. Wi-Fi, camera, brightness and the keyboard work, and
-Settings opens in under a second once the apps are compiled. Mobile data is untested.
+Android 10 vendor image and the stock 4.9.190 kernel. It boots to a working UI. Wi-Fi, Bluetooth, audio, camera, brightness and the keyboard work, and
+Settings opens in under a second once the apps are compiled. Cellular, USB mode switching and DRM playback do not work (see "Known issues").
 
 This repository holds the patches, helper tools and notes. It is not a turnkey build: most of the fixes were applied to a live system
 over adb and TWRP, and `build/build_image17.py` only reproduces the early part of that (see "Using this").
 
 Companion repositories:
 - [`tb-x606v-kernel`](https://github.com/manvindar/tb-x606v-kernel): the 4.9 kernel patches and CI build. The final setup does not use it (see below).
-- `tb-x606v-android16-port`: the Android 16 build for this tablet, the known good fallback.
+- [`tb-x606v-android16-port`](https://github.com/manvindar/tb-x606v-android16-port): the Android 16 build for this tablet, the known good fallback. It uses the same Gemini boot animation by default.
 
 ## Status (2026-10-27)
 
@@ -19,16 +19,41 @@ Companion repositories:
 | eBPF loader, `netd`, ConnectivityService | works (patched binaries and jars bind-mounted over the APEX copies) |
 | GPU, SurfaceFlinger, SystemUI, launcher, Settings | works |
 | Wi-Fi | connects and stays connected |
-| Camera | works |
+| Camera | works (video encoding untested; the MediaTek encoders log "unsupported parameter") |
 | Brightness | works, through a Java AIDL lights shim (`tools/lights`) |
 | Keyboard (AOSP LatinIME) | works |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
-| Bluetooth | works: turns on, stays up, scans and pairs (audio profiles not tried, since there is no audio output yet) |
-| Audio output | works through Android 16's `audioserver` and library closure run privately (`tools/audio`); tone test plays, other apps not yet checked |
-| Mobile data and telephony | not tried |
+| Bluetooth | works: turns on, stays up, scans and pairs (A2DP headphones not tried) |
+| Audio output | works through Android 16's `audioserver` and library closure run privately (`tools/audio`); a 440 Hz test tone plays, other apps not yet checked |
+| Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
+| Cellular (calls, SMS, mobile data) | not working, see below |
+| USB file transfer, tethering | probably not working, untested |
+| DRM (Widevine) | not provisioned |
 
 First boot is slow until the apps are compiled. The GSI ships no odex, so every app runs from its APK. Run `tools/scripts/dexopt_all.sh`
 once (it takes a few minutes): Settings goes from about 50 s to under a second cold.
+
+## Known issues
+
+From a read of the logs after a clean boot (no crashes, ANRs or service restarts):
+
+- **Cellular.** The phone process reports "out of service" with an unknown radio HAL version, and Settings throws `UnsupportedOperationException` for the IMEI. Android 17's telephony does not
+  accept the Android 10 vendor radio HAL (`mtkfusionrild`). Needs a SIM to confirm; fixing it is a project of its own.
+- **USB mode switching.** `UsbDeviceManager` logs "usb gadget hidl hal service not found" and "Failed to open control for ptp". The vendor only has `android.hardware.usb@1.1` (port roles), no gadget HAL.
+  adb works because init sets that up itself. File transfer and USB tethering are untested.
+- **Widevine** fails to provision (`ERROR_DRM_CANNOT_HANDLE`), so protected streaming will probably not play.
+- **Harmless noise.** fs-verity setup fails on every permissions write (the kernel has no verity), the GPU memory BPF map and `bpf_system_stats` ringbuf iterator are missing, and fingerprint, face and a
+  few other managers are absent on this hardware. The Wi-Fi data-stall monitor logs "ignore this poll" constantly.
+- **Load average** sits around 25. It is MediaTek kernel threads in uninterruptible sleep, not CPU use (the cores are about 95% idle).
+- `dumpsys bluetooth_manager` crashes the Bluetooth process (`ControllerImpl::Dump`); debug only.
+- **A2DP.** The audio policy asks for an `a2dp` module that the 5.0 HAL does not have, so Bluetooth headphones are untested.
+
+## Boot animation
+
+The default is the Pixel 10 Gemini animation from [docbt/GeminiBootAnimation](https://github.com/docbt/GeminiBootAnimation) (MIT, Copyright (c) 2026 docbt). The original is 1080x2340;
+`tools/boot-animation/make_gemini_fit.py` scales it to the 1200x1920 panel, centres it on black and reduces it to a 128-colour palette (13 MB, stored zip). Install it as
+`/system/product/media/bootanimation.zip`. Other candidates that were previewed: ArrowOS (the leftover from the Android 16 customisation), a generated galaxy, the Lineage original,
+and Pixel-style and Lenovo Yoga Smart Tab animations from the [Android Boot Animation Collection](https://github.com/tntapple219/Android-Boot-Animation-Collection) (unlicensed, not included).
 
 ## Why the stock kernel
 
