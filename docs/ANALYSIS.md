@@ -102,3 +102,10 @@ Still open: audio outputs (needs a real 5.0 client or a 6.0/7.0 HAL shim), camer
 After the loopback consumer no-op, system_server stays up and the UI comes up on the tablet: Android 17 shows the system dialog
 "There's an internal problem with your device. Contact your manufacturer for details" (the build-consistency check in ActivityManagerService.systemReady,
 `Build.isBuildConsistent()`). Then the tablet powered off (cause not yet read from the logs).
+
+### Milestone: Android 17 booted with adb (2026-10-27)
+`libmeminfo` abort neutralised (`tools/libc/patch_libmeminfo.py`). Now `sys.boot_completed=1`, `ro.build.version.release=17`, kernel 4.9.190 (stock), adb works after a normal boot,
+system_server stable (pid unchanged for minutes), SurfaceFlinger composes, SystemUI/Launcher3/Settings run, screenshots work (`screencap`). Remaining visible issues:
+the "There's an internal problem with your device" dialog (Build.isBuildConsistent, Treble => VINTF verifyBuildAtBoot), SystemUI start slow/ANR before dexopt
+(`cmd package compile -m speed -f com.android.systemui com.android.launcher3` fixes it), black wallpaper/home, lmkd is a stub (AMS spams "Failed to connect to lmkd").
+Unattended loop from here: adb root, `mount -o remount,rw /` (and /vendor), edit, `adb reboot`.
