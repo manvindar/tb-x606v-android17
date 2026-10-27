@@ -2,7 +2,11 @@
 #  - netbpfload.tracer: runs netbpfload.a17 (kernel-version gates patched out) under a ptrace logger and sets bpf.progs_loaded
 #  - netd.o with LRU_HASH maps turned into HASH (4.9 has no LRU_HASH)
 #  - libnetd_updatable.so with the kernel-version gates patched out
+#  - service-connectivity.jar without the local_net_* map setup (those maps need kernel 5.x)
+#  - libservice-connectivity.so without the abort() on /sys/fs/bpf owner/context mismatches (stock 4.9 labels all bpf files fs_bpf)
 on load-bpf-programs
     mount none /system/bin/netbpfload.tracer /apex/com.android.tethering/bin/netbpfload bind
     mount none /system/etc/bpf.a17/netd.o /apex/com.android.tethering/etc/bpf/mainline/netd.o bind
     mount none /system/etc/bpf.a17/libnetd_updatable.so /apex/com.android.tethering/lib64/libnetd_updatable.so bind
+    mount none /system/etc/bpf.a17/libservice-connectivity.so /apex/com.android.tethering/lib64/libservice-connectivity.so bind
+    mount none /system/etc/bpf.a17/service-connectivity.jar /apex/com.android.tethering/javalib/service-connectivity.jar bind

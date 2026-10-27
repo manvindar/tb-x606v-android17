@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Binary patches that let the Android 17 tethering apex run on kernel 4.9 (apex files are signed, so patched copies are bind-mounted over them).
-usage: patch_binaries.py netbpfload IN OUT | netd_updatable IN OUT
+usage: patch_binaries.py netbpfload IN OUT | netd_updatable IN OUT | service_connectivity IN OUT
 Each patch asserts the original instruction, so it only applies to the Android 17 DP11.261002.005 build (tethering 374399999).
 Instruction encodings: NOP 0xd503201f, B imm26 0x14000000."""
 import struct, sys
@@ -33,10 +33,13 @@ NETD_UPDATABLE = [
     (0x9614, 'to-b', 0x998c),            # 25Q2 gate: kernel < 5.4
     (0xaae0, 'nop-any'), (0xb004, 'nop-any'),  # newest-platform flag forces the sockops program (5.15+) to exist
 ]
+# libservice-connectivity.so: JNI_OnLoad (ClatCoordinator) verifies owner/mode/SELinux context of the pinned bpf files and abort()s on any mismatch;
+# the stock 4.9 kernel labels everything under /sys/fs/bpf as fs_bpf (no per-directory genfs labels). NOP the `b.eq abort`.
+SERVICE_CONNECTIVITY = [(0xbce4, 'nop-any')]
 def main():
     which, src, dst = sys.argv[1:4]
     d = bytearray(open(src, 'rb').read())
-    for p in {'netbpfload': NETBPFLOAD, 'netd_updatable': NETD_UPDATABLE}[which]:
+    for p in {'netbpfload': NETBPFLOAD, 'netd_updatable': NETD_UPDATABLE, 'service_connectivity': SERVICE_CONNECTIVITY}[which]:
         patch(d, p[0], p[1], p[2] if len(p) > 2 else None)
-    open(dst, 'wb').write(d); print('patched', len(NETBPFLOAD if which == 'netbpfload' else NETD_UPDATABLE), 'sites ->', dst)
+    open(dst, 'wb').write(d); print('patched', which, '->', dst)
 main()
