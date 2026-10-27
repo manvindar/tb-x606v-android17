@@ -3,6 +3,7 @@
 #  - netd.o with LRU_HASH maps turned into HASH (4.9 has no LRU_HASH)
 #  - libnetd_updatable.so with the kernel-version gates patched out
 #  - service-connectivity.jar without the local_net_* map setup (those maps need kernel 5.x)
+#  - libbluetooth_jni.so without the fatal on unexpected HCI command status (0x0c5a)
 #  - libservice-connectivity.so without the abort() on /sys/fs/bpf owner/context mismatches (stock 4.9 labels all bpf files fs_bpf)
 on load-bpf-programs
     mount none /system/bin/netbpfload.tracer /apex/com.android.tethering/bin/netbpfload bind
@@ -10,3 +11,4 @@ on load-bpf-programs
     mount none /system/etc/bpf.a17/libnetd_updatable.so /apex/com.android.tethering/lib64/libnetd_updatable.so bind
     mount none /system/etc/bpf.a17/libservice-connectivity.so /apex/com.android.tethering/lib64/libservice-connectivity.so bind
     mount none /system/etc/bpf.a17/service-connectivity.jar /apex/com.android.tethering/javalib/service-connectivity.jar bind
+    mount none /system/etc/bpf.a17/libbluetooth_jni.so /apex/com.android.bt/lib64/libbluetooth_jni.so bind

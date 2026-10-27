@@ -1,7 +1,7 @@
 # Android 17 on the Lenovo TB-X606V: how far it gets
 
 An experiment to run Google's Android 17 GSI (`aosp_arm64`, build DP11.261002.005) on the Lenovo Tab M10 FHD Plus (TB-X606V,
-MT8768) with its stock Android 10 vendor image and a 4.9 kernel. **It does not reach a UI.** This repository holds the build
+MT8768) with its stock Android 10 vendor image and the stock 4.9.190 kernel. **It reaches the UI, with open issues listed below.** This repository holds the build
 recipe, the patches and the findings, so the work can be picked up or abandoned with the facts in hand.
 
 Companion repositories:
@@ -10,22 +10,22 @@ Companion repositories:
 
 ## Status
 
-Verified from kernel and `init` logs of real boots:
+As of 2026-10-27 it boots to the UI on the stock 4.9.190 kernel with a patched Android 17 userspace. adb works with root, `sys.boot_completed=1`,
+and Settings and the launcher open. It is slow (load average ~25 right after boot, long first-boot delays) and not usable day to day yet.
 
 | Stage | State |
 |---|---|
-| Kernel 4.9.117 (Lenovo OSS drop plus patches) boots | works |
-| First-stage `init`, system and vendor mounted | works |
-| SELinux policy compiled and loaded (permissive) | works |
-| Cgroups v1 and v2, `ueventd`, `apexd`, 45 APEXes activated | works |
-| `/data`, `/metadata`, `/cache` mounted, `vold`, `keystore2`, vendor HAL daemons | works |
-| eBPF loader (`netbpfload`) | **fails: `Android U requires kernel 4.14.`** |
-| `zygote`, `system_server`, boot animation, launcher | not reached |
+| Stock kernel 4.9.190 boot image, first-stage `init`, SELinux (permissive), APEXes | works |
+| eBPF loader, `netd`, ConnectivityService (bind-mounted patched binaries and jars) | works |
+| `zygote`, `system_server` (stable for minutes), SurfaceFlinger, PowerVR GPU, SystemUI, Launcher3, Settings | works |
+| Power HAL, PQ HAL, camera/sensor service startup (libbinder frozen-callback patch) | works |
+| Bluetooth | in progress: HCI `0x0c5a` fatal replaced by an ignore branch; `com.android.bluetooth` stays up but the stack was still `BLE_TURNING_ON` 40 s after enable |
+| Audio output | not working: `audioserver` is stable but has no outputs (needs a 5.0 client/HAL shim) |
+| Camera capture | not verified |
+| lmkd | stub only (AMS logs "Failed to connect to lmkd") |
 
-The last row is the wall. `/apex/com.android.tethering/bin/netbpfload` refuses to run below kernel 4.14 and its service is
-`reboot_on_failure`. Stopping the reboot is not enough: the network stack (`netd`, ConnectivityService) needs the BPF maps, and the
-programs target helpers and map types a 4.9 kernel does not have. The binary also lists later minimums (4.19, 5.4, 5.10, 5.15) for
-newer release codenames. Nothing here was found that makes 4.9 acceptable to this Android release.
+The earlier attempt on the OSS 4.9.117 kernel is abandoned: its PowerVR driver rejects the vendor GPU firmware. Details of every
+patch and the order they were found are in `docs/ANALYSIS.md`.
 
 ## What was needed to get this far
 
