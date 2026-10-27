@@ -12,7 +12,7 @@ Companion repositories:
 
 ## Install the prebuilt image
 
-Images are on the [Releases page](https://github.com/manvindar/tb-x606v-android17/releases): `system-a17-tb-x606v-gapps.img.xz` (with Google apps) or `...-nogapps.img.xz`. They are dumps of the tested
+Images are on the [Releases page](https://github.com/manvindar/tb-x606v-android17/releases): `system-a17-tb-x606v-gapps.img.xz` (with Google apps) or `...-nogapps.img.xz` (`v17-dp11-r3` is built by GitHub Actions, so its files end in `-nodexopt.img.xz` and compile themselves after the first boot). The r1 and r2 files are dumps of the tested
 partition with the main system apps already compiled, so the first boot is not slow. They contain Google's Android 17 GSI (and Google's apps in the gapps image), under Google's terms. Dolby Atmos is not in them.
 
 **You need (once):** a TB-X606V on the stock Android 10 firmware (tested on `TB-X606V_USR_S300665_2206300345_V9.56_BMP_ROW`), an unlocked bootloader, TWRP in the recovery partition, USB debugging on,
@@ -209,7 +209,7 @@ python3 build/build_image17.py --gsi system.img --donor LineageOS-23.2-GSI.img -
 python3 build/verify_image.py system-a17-nogapps.img other.img          # file by file comparison (mode, owner, label, sha256)
 ```
 The same build runs on GitHub Actions (`.github/workflows/build-image.yml`, Actions tab, "Run workflow"; tick `publish` to attach the images to a release). It produces `*-nodexopt.img.xz` files:
-the images have **no compiled app code** because `dex2oat` needs a booted tablet. After the first boot run `tools/scripts/dexopt_on_tablet.sh` once (10 to 15 minutes). The `v17-dp11-r*` releases are dumps of a tested tablet and are already compiled.
+the images have **no compiled app code** because `dex2oat` needs a booted tablet. They carry a one-time first-boot job (`zz_firstboot_dexopt.rc`) that compiles the apps in the background three minutes after boot (10 to 15 minutes, again after about 45 minutes), or run `tools/scripts/dexopt_on_tablet.sh` yourself. The `v17-dp11-r1` and `r2` releases are dumps of a tested tablet and are already compiled.
 Optional layers, both off by default and neither redistributable (so neither is in the CI images or the releases):
 - `--dolby DIR` adds Dolby Atmos from your own copy of the Lenovo firmware (`DaxUI.apk`, `daxService.patched.apk`, `com.dolby.daxservice.xml`). The vendor side (`libswdap.so` fix, `vendor_mac_permissions.xml`) lives in the vendor partition and survives system flashes.
 - `--pixel NikGapps-full-arm64-16-*.zip --pixel-launcher-apk PIXEL.apk` adds the Pixel layer described in `docs/PIXEL.md`: Pixel Launcher (rebuilt from the Android 17 APKMirror APK with `tools/pixel/build_pixel_launcher.sh`), Wallpaper & style, sounds,
