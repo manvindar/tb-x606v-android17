@@ -12,3 +12,6 @@ on load-bpf-programs
     mount none /system/etc/bpf.a17/libservice-connectivity.so /apex/com.android.tethering/lib64/libservice-connectivity.so bind
     mount none /system/etc/bpf.a17/service-connectivity.jar /apex/com.android.tethering/javalib/service-connectivity.jar bind
     mount none /system/etc/bpf.a17/libbluetooth_jni.so /apex/com.android.bt/lib64/libbluetooth_jni.so bind
+#  - libui (gralloc) of the software codec apex: same API-level gate and usage-bit patches as the system libui, otherwise mediaswcodec aborts with "gralloc-mapper is missing"
+    mount none /system/etc/bpf.a17/libui_swcodec64.so /apex/com.android.media.swcodec/lib64/libui.so bind
+    mount none /system/etc/bpf.a17/libui_swcodec32.so /apex/com.android.media.swcodec/lib/libui.so bind
