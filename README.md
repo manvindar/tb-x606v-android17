@@ -23,7 +23,7 @@ Companion repositories:
 | Brightness | works, through a Java AIDL lights shim (`tools/lights`) |
 | Keyboard (AOSP LatinIME) | works |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
-| Bluetooth | turns on, stays up, finds nearby devices; pairing and audio profiles not tried |
+| Bluetooth | works: turns on, stays up, scans and pairs (audio profiles not tried, since there is no audio output yet) |
 | Audio output | not working: `audioserver` is stable but has no outputs (the HAL is 5.0, Android 17 expects newer) |
 | Mobile data and telephony | not tried |
 

@@ -128,3 +128,9 @@ Open: Bluetooth (com.android.bluetooth native crash), audio outputs, camera, lmk
 - **Wi-Fi connect killed system_server**: `BpfNetMaps.addLocalNetAccess -> incrementLnpGenerationId` NPE (maps skipped earlier). Nine BpfNetMaps methods are now `return-void`. Overwriting only the first code unit gave a VerifyError (the rest of the 2-unit instruction decoded as garbage); `return-void` + `nop` is right.
 - **Brightness**: A17 LightsService only talks to the AIDL `android.hardware.light.ILights`; the vendor only has HIDL light@2.0. `tools/lights/` has a Java shim (app_process, hand-parsed AIDL parcels, writes `/sys/class/leds/lcd-backlight/brightness`), its rc, and the vintf fragment `/vendor/etc/vintf/manifest/android.hardware.light-aidl.xml`.
 - **Bluetooth**: after the HCI 0x0c5a status is ignored, `btm_sec_dev_reset` aborts with "only controllers with SSP is supported"; the `tbz` at 0xabaf10 is nopped.
+
+## Bluetooth, final form
+
+An unconditional `b` over the `tbz w20,#0,<assert>` branches skipped the handling of every command-status event (the stack then believed the controller had no LE or SSP
+and Settings showed address 00:00:00:00:00:00). The correct patch only retargets the failing branch to the normal exit, so a mismatching event is dropped and matching ones are handled as before.
+`dumpsys bluetooth_manager` crashes in `ControllerImpl::Dump` (debug only). Verified 2026-10-27: Bluetooth turns on, scans, pairs.
