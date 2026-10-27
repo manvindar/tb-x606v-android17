@@ -26,6 +26,9 @@ public class MainActivity extends Activity {
     private float dp;
     private String page = HOME;
     private TextView status;
+    private TextView liveCpu, liveGpu, liveMem, liveHeat;
+    private final android.os.Handler ui = new android.os.Handler();
+    private final Runnable tick = new Runnable() { @Override public void run() { refreshLive(); ui.postDelayed(this, 1000); } };
     private final Runnable reload = () -> { st = Cfg.load(this); setStatus("Applied"); build(); };
 
     // preset id, name, one-line description
@@ -46,7 +49,9 @@ public class MainActivity extends Activity {
         if (p != null) page = p;
     }
 
-    @Override protected void onResume() { super.onResume(); st = Cfg.load(this); build(); }
+    @Override protected void onResume() { super.onResume(); st = Cfg.load(this); build(); ui.post(tick); }
+
+    @Override protected void onPause() { super.onPause(); ui.removeCallbacks(tick); }
 
     @Override public void onBackPressed() { if (!HOME.equals(page)) go(HOME); else super.onBackPressed(); }
 
@@ -208,6 +213,7 @@ public class MainActivity extends Activity {
 
     // ---------- frame ----------
     private void build() {
+        liveCpu = liveGpu = liveMem = liveHeat = null;
         ScrollView sv = new ScrollView(this);
         sv.setBackgroundColor(surface());
         LinearLayout outer = new LinearLayout(this);
@@ -260,6 +266,61 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- live readout (read straight from sysfs; the tuner's ROM runs permissive, elsewhere the cells show a dash) ----------
+    private static String rd(String path) {
+        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(path))) { String l = r.readLine(); return l == null ? "" : l.trim(); }
+        catch (Exception e) { return ""; }
+    }
+    private static String grep(String path, String key) {
+        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(path))) {
+            String l; while ((l = r.readLine()) != null) if (l.contains(key)) return l;
+        } catch (Exception ignored) { }
+        return "";
+    }
+    private static long num(String s) { java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)").matcher(s); return m.find() ? Long.parseLong(m.group(1)) : -1; }
+    private static String ghz(long khz) { return khz < 0 ? "–" : String.format(Locale.US, "%.2f", khz / 1e6); }
+
+    private void refreshLive() {
+        if (liveCpu == null) return;
+        String c = "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq";
+        long a = num(rd(String.format(c, 0))), b = num(rd(String.format(c, 4)));
+        liveCpu.setText(ghz(a) + " · " + ghz(b));
+        long g = num(grep("/proc/gpufreq/gpufreq_var_dump", "g_cur_opp_freq"));
+        liveGpu.setText(g < 0 ? "–" : (g / 1000) + " MHz");
+        long ddr = num(grep("/sys/devices/platform/10012000.dvfsrc/helio-dvfsrc/dvfsrc_dump", "DDR"));
+        long avail = num(grep("/proc/meminfo", "MemAvailable")), total = num(grep("/proc/meminfo", "MemTotal"));
+        liveMem.setText((ddr < 0 ? "–" : (ddr / 1000) + " MHz") + (avail < 0 || total < 0 ? "" : "\n" + String.format(Locale.US, "%.1f of %.1f GB free", avail / 1048576f, total / 1048576f)));
+        long t = -1;
+        for (int i = 0; i < 12 && t < 0; i++) if ("mtktscpu".equals(rd("/sys/class/thermal/thermal_zone" + i + "/type"))) t = num(rd("/sys/class/thermal/thermal_zone" + i + "/temp"));
+        liveHeat.setText(t < 0 ? "–" : String.format(Locale.US, "%.0f °C", t / 1000f));
+    }
+
+    private TextView liveCell(LinearLayout c, String label, float weight) {
+        LinearLayout cell = new LinearLayout(this);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        cell.setPadding(px(14), px(12), px(8), px(12));
+        cell.addView(text(label, 12.5f, false, dim()));
+        TextView v = text("–", 17, true, ink());
+        v.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        cell.addView(v);
+        c.addView(cell, new LinearLayout.LayoutParams(0, -2, weight));
+        return v;
+    }
+
+    private void liveCard() {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.HORIZONTAL);
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(card()); g.setCornerRadius(px(26));
+        c.setBackground(g);
+        liveCpu = liveCell(c, "CPU, GHz (fast · slow cores)", 1.25f);
+        liveGpu = liveCell(c, "GPU", 0.8f);
+        liveMem = liveCell(c, "Memory clock and free RAM", 1.3f);
+        liveHeat = liveCell(c, "Chip temperature", 0.8f);
+        col.addView(c, new LinearLayout.LayoutParams(-1, -2));
+        refreshLive();
+    }
+
     // ---------- home ----------
     private void pageHome() {
         String cur = get("preset", "balanced");
@@ -279,6 +340,7 @@ public class MainActivity extends Activity {
         desc.setGravity(Gravity.CENTER); desc.setPadding(px(24), 0, px(24), px(10));
         col.addView(desc, new LinearLayout.LayoutParams(-1, -2));
 
+        liveCard();
         LinearLayout c = group(null);
         rowGo(c, "Performance details", perfSummary(), "perf");
         c = group(null);
@@ -309,6 +371,7 @@ public class MainActivity extends Activity {
 
     // ---------- pages ----------
     private void pagePerf() {
+        liveCard();
         TextView hint = text("Changing a setting here turns the preset into Custom. The dial on the home screen sets all of these together.", 13.5f, false, dim());
         hint.setPadding(px(10), px(6), px(10), 0); col.addView(hint);
         LinearLayout c = group("Clock speed");
