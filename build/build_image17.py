@@ -71,6 +71,11 @@ bp = cat(a.out, '/system/build.prop').decode()
 for x, y in (('ro.secure=1', 'ro.secure=0'), ('ro.debuggable=0', 'ro.debuggable=1'), ('ro.force.debuggable=0', 'ro.force.debuggable=1'), ('ro.adb.secure=1', 'ro.adb.secure=0')):
     assert x in bp, x; bp = bp.replace(x, y)
 bp += '\npersist.sys.bt.unsupported.commands=182\npersist.sys.usb.config=adb\n'
+# the GSI ships no bluetooth.mk properties, so no profile (A2DP, HFP, HID...) is started and nothing can connect
+bp += ('\nbluetooth.device.class_of_device=90,2,12\nbluetooth.profile.a2dp.source.enabled=true\nbluetooth.profile.avrcp.target.enabled=true\n'
+       'bluetooth.profile.hfp.ag.enabled=true\nbluetooth.profile.hid.host.enabled=true\nbluetooth.profile.hid.device.enabled=true\nbluetooth.profile.gatt.enabled=true\n'
+       'bluetooth.profile.bas.client.enabled=true\nbluetooth.profile.opp.enabled=true\nbluetooth.profile.pan.nap.enabled=true\nbluetooth.profile.pan.panu.enabled=true\n'
+       'bluetooth.profile.asha.central.enabled=true\n')
 put(tmpfile('build.prop', bp), '/system/build.prop', '600')
 
 # 4 VNDK v29

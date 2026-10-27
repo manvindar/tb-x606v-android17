@@ -23,7 +23,7 @@ Companion repositories:
 | Brightness | works, through a Java AIDL lights shim (`tools/lights`) |
 | Keyboard (AOSP LatinIME) | works |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
-| Bluetooth | works: turns on, stays up, scans and pairs (A2DP headphones not tried) |
+| Bluetooth | works: turns on, scans, pairs, and connects (HFP and A2DP with a Bose QC 45; the A2DP stream starts and stops with playback) |
 | Audio output | works through Android 16's `audioserver` and library closure run privately (`tools/audio`); a 440 Hz test tone plays, other apps not yet checked |
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
 | Cellular (calls, SMS, mobile data) | not working, see below |
@@ -48,7 +48,7 @@ From a read of the logs after a clean boot (no crashes, ANRs or service restarts
   few other managers are absent on this hardware. The Wi-Fi data-stall monitor logs "ignore this poll" constantly.
 - **Load average** sits around 25. It is MediaTek kernel threads in uninterruptible sleep, not CPU use (the cores are about 95% idle).
 - `dumpsys bluetooth_manager` crashes the Bluetooth process (`ControllerImpl::Dump`); debug only.
-- **A2DP.** The `bluetooth` audio module (BT audio HAL 2.0) loads, but the legacy `a2dp` module used for A2DP input does not exist in the 5.0 HAL ("could not load HW module a2dp"). Bluetooth headphones are untested.
+- **A2DP input.** The legacy `a2dp` module used for A2DP input (acting as a sink) does not exist in the 5.0 HAL ("could not load HW module a2dp"). A2DP output to headphones works.
 
 ## Boot animation
 
@@ -56,6 +56,13 @@ The default is the Pixel 10 Gemini animation from [docbt/GeminiBootAnimation](ht
 `tools/boot-animation/make_gemini_fit.py` scales it to the 1200x1920 panel, centres it on black and reduces it to a 128-colour palette (13 MB, stored zip). Install it as
 `/system/product/media/bootanimation.zip`. Other candidates that were previewed: ArrowOS (the leftover from the Android 16 customisation), a generated galaxy, the Lineage original,
 and Pixel-style and Lenovo Yoga Smart Tab animations from the [Android Boot Animation Collection](https://github.com/tntapple219/Android-Boot-Animation-Collection) (unlicensed, not included).
+
+## Bluetooth profiles
+
+Pairing worked but nothing could connect: the GSI sets none of the `bluetooth.profile.*` properties that AOSP's `bluetooth.mk` normally provides, so the Bluetooth app started no profile service
+except hearing aid and never connected A2DP or HFP after pairing (the remote simply hung up after SDP). `build/build_image17.py` now appends those properties to `build.prop` (a2dp source, avrcp target,
+hfp ag, hid host and device, gatt, bas client, opp, pan, asha, and a class of device). The `persist.sys.bt.unsupported.commands=182` property of the Android 16 / TrebleDroid workaround is also in
+`build.prop`; the AOSP Bluetooth stack ignores it, and the binary patch in `tools/bpf/patch_bluetooth.py` does that job.
 
 ## Serial console warning
 
