@@ -11,7 +11,7 @@ PACKS = {   # name -> AppSet path inside the NikGapps zip
     'SettingsServices': 'PixelSpecifics/SettingsServices', 'DevicePersonalizationServices': 'PixelSpecifics/DevicePersonalizationServices',
     'PrivateComputeServices': 'PixelSpecifics/PrivateComputeServices', 'EmojiWallpaper': 'PixelSpecifics/EmojiWallpaper',
     'QuickAccessWallet': 'PixelSpecifics/QuickAccessWallet', 'PixelWeather': 'PixelSpecifics/PixelWeather', 'GoogleSounds': 'GoogleSounds/GoogleSounds',
-    'GBoard': 'GBoard/GBoard', 'GoogleClock': 'GoogleClock/GoogleClock', 'GoogleCalculator': 'GoogleCalculator/GoogleCalculator',
+    'GBoard': 'GBoard/GBoard', 'GoogleClock': 'GoogleClock/GoogleClock', 'GoogleCalendar': 'GoogleCalendar/GoogleCalendar', 'GoogleCalculator': 'GoogleCalculator/GoogleCalculator',
     'GoogleContacts': 'GoogleContacts/GoogleContacts', 'GoogleDialer': 'GoogleDialer/GoogleDialer', 'GoogleMessages': 'GoogleMessages/GoogleMessages',
     'GoogleFiles': 'GoogleFiles/GoogleFiles', 'DocumentsUIGoogle': 'GoogleFiles/DocumentsUIGoogle', 'StorageManager': 'GoogleFiles/StorageManager',
 }

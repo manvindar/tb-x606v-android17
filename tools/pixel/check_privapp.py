@@ -34,12 +34,12 @@ for apk in glob.glob(stage + '/priv-app/*/*.apk'):
     out = subprocess.run([os.path.join(BT, 'aapt2'), 'dump', 'badging', apk], capture_output=True, text=True).stdout
     pkg = re.search(r"package: name='([^']+)'", out).group(1)
     tree = subprocess.run([os.path.join(BT, 'aapt2'), 'dump', 'xmltree', '--file', 'AndroidManifest.xml', apk], capture_output=True, text=True).stdout
-    orig = re.search(r'E: original-package.*?name\(0x[0-9a-f]+\)="([^"]+)"', tree, re.S)
-    if orig: pkg = orig.group(1)      # Google Clock is com.google.android.deskclock but registers as its original package com.android.deskclock
+    names = [pkg] + re.findall(r'E: original-package[^\n]*\n\s+A: [^\n]*name\(0x[0-9a-f]+\)="([^"]+)"', tree)   # an app can register under an original-package name (Google Clock: com.android.deskclock)
     req = set(re.findall(r"uses-permission(?:-sdk-\d+)?: name='([^']+)'", out))
-    miss = sorted(p for p in req if p in priv and p not in allowed.get(pkg, ()))
+    miss = sorted(p for p in req if p in priv and not all(p in allowed.get(n, ()) for n in names))
     print(f'{pkg}: {len(req)} permissions requested, {len(miss)} privileged not allowed' + (': ' + ', '.join(miss) if miss else ''))
-    if miss: bad[pkg] = miss
+    if miss:
+        for n in names: bad[n] = miss
 if len(sys.argv) > 2 and bad:
     with open(sys.argv[2], 'w') as f:
         f.write('<?xml version="1.0" encoding="utf-8"?>\n<permissions>\n')

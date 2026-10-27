@@ -23,5 +23,7 @@ Revert: `cmd role add-role-holder --user 0 android.app.role.HOME com.android.lau
 ## Other Pixel/Google apps (live install, from the NikGapps Android 16 full zip)
 `tools/pixel/stage_pixel.py ZIP OUT_DIR Name...` unpacks packages into a /system/product layout (static overlays and offline-speech data are left out), then
 `tools/pixel/check_privapp.py OUT_DIR` dry-runs the boot-time privileged-permission allowlist check against the attached tablet. Run it before pushing anything into a priv-app dir.
-Installed and booting: Gboard (replaces AOSP LatinIME, same package name), Google Contacts, Calculator, Files, Emoji wallpaper, Wallpaper & style, Sounds.
-Left out: Google Clock (registers as `com.android.deskclock`, needs extra allowlist entries; the first attempt hung the boot), Dialer and Messages (no telephony), DocumentsUI/StorageManager (framework-critical), At a Glance / Weather (need Device Personalization Services).
+Installed and booting: Google Contacts, Calculator, Files, Calendar, Clock, Emoji wallpaper, Wallpaper & style, Sounds.
+Google Clock registers under original-package names (`com.android.deskclock`, `com.android.alarmclock`); the first attempt hung the boot until `privapp-permissions-clock-a17.xml` allowlisted its three privileged permissions under all three names (`check_privapp.py` now checks every candidate name).
+Gboard did NOT work: it replaced AOSP LatinIME, started, but drew no keyboard (its dynamic feature modules come from Play and are not in the NikGapps base APK: `Module ngi is not available`). Removed; AOSP keyboard restored.
+Left out: Dialer and Messages (no telephony), DocumentsUI/StorageManager (framework-critical), At a Glance / Weather (need Device Personalization Services).
