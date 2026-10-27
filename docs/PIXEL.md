@@ -19,3 +19,9 @@ Expect more mismatches behind that one; each one crashes SystemUI, so it was not
 
 Install: `tools/pixel/install_pixel.sh PIXEL.apk NikGapps-full-arm64-16-*.zip`, then `cmd role add-role-holder --user 0 android.app.role.HOME com.google.android.apps.nexuslauncher`.
 Revert: `cmd role add-role-holder --user 0 android.app.role.HOME com.android.launcher3`, delete `/system/product/priv-app/NexusLauncherRelease` and the three nexuslauncher xml files.
+
+## Other Pixel/Google apps (live install, from the NikGapps Android 16 full zip)
+`tools/pixel/stage_pixel.py ZIP OUT_DIR Name...` unpacks packages into a /system/product layout (static overlays and offline-speech data are left out), then
+`tools/pixel/check_privapp.py OUT_DIR` dry-runs the boot-time privileged-permission allowlist check against the attached tablet. Run it before pushing anything into a priv-app dir.
+Installed and booting: Gboard (replaces AOSP LatinIME, same package name), Google Contacts, Calculator, Files, Emoji wallpaper, Wallpaper & style, Sounds.
+Left out: Google Clock (registers as `com.android.deskclock`, needs extra allowlist entries; the first attempt hung the boot), Dialer and Messages (no telephony), DocumentsUI/StorageManager (framework-critical), At a Glance / Weather (need Device Personalization Services).

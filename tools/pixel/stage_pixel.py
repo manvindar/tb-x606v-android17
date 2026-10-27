@@ -16,13 +16,16 @@ PACKS = {   # name -> AppSet path inside the NikGapps zip
     'GoogleFiles': 'GoogleFiles/GoogleFiles', 'DocumentsUIGoogle': 'GoogleFiles/DocumentsUIGoogle', 'StorageManager': 'GoogleFiles/StorageManager',
 }
 
-def stage(nik_zip, out, names):
+SKIP = ('/overlay/', '/usr/srec/', '/usr/share/', 'preinstalled-packages-platform-overlays.xml')   # static overlays and offline-speech data are left out
+
+def stage(nik_zip, out, names, skip=SKIP):
     z = zipfile.ZipFile(nik_zip)
     for n in names:
         inner = zipfile.ZipFile(io.BytesIO(z.read(f'AppSet/{PACKS[n]}.zip')))
         for m in inner.infolist():
             if m.is_dir() or not m.filename.startswith('___'): continue     # installer.sh / uninstaller.sh stay behind
-            if m.filename.endswith('preinstalled-packages-platform-overlays.xml'): continue   # AOSP's own list is already in the GSI
+            dst0 = m.filename.replace('___', '/')
+            if any(k in dst0 for k in skip): continue
             dst = os.path.join(out, m.filename.replace('___', '/').lstrip('/'))
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             with open(dst, 'wb') as f: f.write(inner.read(m))
