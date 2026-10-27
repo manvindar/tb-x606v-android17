@@ -10,9 +10,18 @@ and MindTheGapps for the gapps image. Every patch in `tools/` is applied by the 
 
 Both unpack to a raw ext4 image of 4085252096 bytes (the partition size). Dolby Atmos is not included.
 
-## Difference from the maintainer-built releases
-These images have **no precompiled app code** (compiling needs a booted tablet, `dex2oat` does not run offline). The first boot is slow and Settings takes a long time to open until the apps are compiled.
-After the first boot, with the tablet connected over adb, run `tools/scripts/dexopt_on_tablet.sh` (10 to 15 minutes, once). The `v17-dp11-r*` releases are dumps of a tested tablet and are already compiled.
+## What is in this build
+Everything the tablet needed, found and fixed on the tablet itself: the Android 17 boot and BPF fixes, audio (Android 16 audioserver), Bluetooth, GPS, Maps, video, brightness, plus:
+- **Speed:** window blur off (`persist.sysui.disableBlur`), the USAP process pool on, `traced` off, and a first-boot job that compiles the apps (below).
+- **ROM Tuner, redesigned:** a preset dial (Battery to Extreme), live CPU, GPU, memory clock, free RAM and temperature, saved profiles, a Picture section for MediaTek MiraVision (sharpness is off by default, it made video look worse), and a Widevine readout under System.
+- **Real device identity:** the tablet reports Lenovo TB-X606V instead of "AOSP on ARM64" (streaming apps choose their quality by model).
+- **Network location patch** for `services.jar` (Play services' provider now binds; Wi-Fi location still needs Google's module; GPS needs a clear sky).
+- **Dolby support in the installer:** the vendor edits now also remove the `deep_buffer` audio output, which is what made Dolby inaudible (Dolby's effect sits on the primary output only). Dolby Atmos itself is not in the image.
+
+## Compiled apps
+These images carry **no precompiled app code** (compiling needs a booted tablet). Instead the image starts a one-time job three minutes after the first boot that compiles the Google apps and system apps in speed mode (10 to 15 minutes, background priority),
+and again about 45 minutes later for apps the Play Store updated in between. Until it is done the tablet is slow. To do it by hand: `tools/scripts/dexopt_on_tablet.sh`. Log: `/data/local/tmp/dexopt.log`.
+The `v17-dp11-r1` and `r2` releases are dumps of a tested tablet and are already compiled (Play services excepted).
 
 ## Install (wipes all data)
 Needs stock Android 10 firmware (tested on V9.56), unlocked bootloader, TWRP in recovery, USB debugging on, platform-tools and `xz`.

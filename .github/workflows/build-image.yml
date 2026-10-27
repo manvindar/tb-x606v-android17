@@ -1,7 +1,7 @@
 name: Build image
 
 # Builds the patched Android 17 system images (gapps and nogapps) for the Lenovo TB-X606V from public inputs and optionally publishes them as a release.
-# Not included (proprietary or tablet-specific): Dolby Atmos, the vendor edits (tools/scripts/apply_vendor_a17.sh) and compiled app code (needs a booted tablet).
+# Not included (proprietary or tablet-specific): Dolby Atmos, the vendor edits (tools/scripts/apply_vendor_a17.sh, applied by install_a17.sh) and compiled app code (the image compiles itself on first boot).
 on:
   workflow_dispatch:
     inputs:
