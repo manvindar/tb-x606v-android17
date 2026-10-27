@@ -147,6 +147,7 @@ bp = cat(S, '/system/build.prop').decode()
 for x, y in (('ro.secure=1', 'ro.secure=0'), ('ro.debuggable=0', 'ro.debuggable=1'), ('ro.force.debuggable=0', 'ro.force.debuggable=1'), ('ro.adb.secure=1', 'ro.adb.secure=0')):
     assert x in bp, x; bp = bp.replace(x, y)
 bp += '\npersist.sys.bt.unsupported.commands=182\npersist.sys.usb.config=adb\nro.hw_timeout_multiplier=5\n'   # slow device: scales AMS/Watchdog/ANR timeouts
+bp += 'dalvik.vm.usap_pool_enabled=true\ndalvik.vm.usap_pool_size_max=4\ndalvik.vm.usap_pool_refill_threshold=2\n'    # pre-forked app processes: faster app start, GSIs ship it off
 bp += 'persist.sysui.disableBlur=1\n'     # window blur (Pixel Launcher drawer, shade) drops the GE8320 to ~17 fps: 72% janky frames with blur, 5% without
 bp += 'persist.traced.enable=0\n'    # perfetto traced crash-loops on kernel 4.9 (no vsock) and flags_health_check retries every 5 s
 # the GSI ships no bluetooth.mk properties, so no profile (A2DP, HFP, HID...) is started and nothing can connect
@@ -244,7 +245,7 @@ bpf_file('libui_swcodec64.so', 'com.android.media.swcodec.capex', '/lib64/libui.
 bpf_file('libui_swcodec32.so', 'com.android.media.swcodec.capex', '/lib/libui.so', lambda i, o: py('libc/patch_libui.py', i, o), '644', SYS)
 def netd(i, o): py('bpf/btfmaps.py', i, '--patch', wp('netd.btf.o')); py('bpf/patch_netd_o.py', wp('netd.btf.o'), o)       # LRU_HASH -> HASH in the BTF, then in .android_maps
 bpf_file('netd.o', T, '/etc/bpf/mainline/netd.o', netd, '644', SYS)
-for rc in ('bpf/00_bpf_bind.rc', 'bpf/00_aee_off.rc', 'zz_a17_rt.rc'): put(os.path.join(TOOLS, rc), '/system/etc/init/' + os.path.basename(rc), '644')
+for rc in ('bpf/00_bpf_bind.rc', 'bpf/00_aee_off.rc', 'zz_a17_rt.rc', 'zz_a17_perf.rc'): put(os.path.join(TOOLS, rc), '/system/etc/init/' + os.path.basename(rc), '644')
 rc = cat(S, '/system/etc/init/netbpfload.rc').decode(); assert 'reboot_on_failure reboot,netbpfload-missing' in rc
 replace(S, '/system/etc/init/netbpfload.rc', tmpf('netbpfload.rc', ''.join(l for l in rc.splitlines(True) if 'reboot_on_failure reboot,netbpfload-missing' not in l)))
 

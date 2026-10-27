@@ -1,0 +1,4 @@
+# Storage tuning from PerfMTK (eMMC): the stock 1 MB read-ahead hurts foreground latency when background I/O runs.
+on boot
+    write /sys/block/mmcblk0/queue/read_ahead_kb 256
+    write /sys/block/mmcblk0/queue/nr_requests 64
