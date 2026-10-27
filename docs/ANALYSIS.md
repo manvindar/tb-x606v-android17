@@ -120,3 +120,11 @@ With adb available after each boot the fixes became a live loop (adb root, `moun
 - pq@2.2 HAL crash loop: the vendor libhidlbase searches `/system/lib64/vndk-sp-29/hw` for `android.hidl.memory@1.0-impl.so`; the A17 image lacks that link (A16 had it).
 - the screen is off after the display timeout and `screencap` is black then: `svc power stayon true`.
 Open: Bluetooth (com.android.bluetooth native crash), audio outputs, camera, lmkd stub, ArrowOS boot animation file (leftover from the Android 16 customization).
+
+## 2026-10-27 08:20: slowness, lmkd, Wi-Fi crash, brightness
+
+- **No compiled system apps.** The GSI ships no odex, so Settings, SystemUI and the IME ran from the APK (`status=run-from-apk`). `tools/scripts/dexopt_all.sh` (`cmd package compile -m speed`) fixes it: Settings cold start 50 s -> 0.9 s. It must be rerun after a userdata wipe.
+- **lmkd.** The A17 lmkd only supports PSI/memcg ("Failed to initialize PSI monitors"). The earlier idle stub never listened on the socket, so AMS slept 3 x 1 s per failed `writeLmkd` while holding locks, which blocked binder calls for seconds and finally tripped the watchdog (zygote restart). `tools/lmkd/lmkd_inkernel.c` (static, zig) accepts the socket and implements TARGET (minfree/adj sysfs), PROCPRIO and PROCS_PRIO (`/proc/pid/oom_score_adj`), GETKILLCNT, UPDATE_PROPS and BOOT_COMPLETED replies, so the in-kernel lowmemorykiller works again. `critical` is removed from `lmkd.rc`.
+- **Wi-Fi connect killed system_server**: `BpfNetMaps.addLocalNetAccess -> incrementLnpGenerationId` NPE (maps skipped earlier). Nine BpfNetMaps methods are now `return-void`. Overwriting only the first code unit gave a VerifyError (the rest of the 2-unit instruction decoded as garbage); `return-void` + `nop` is right.
+- **Brightness**: A17 LightsService only talks to the AIDL `android.hardware.light.ILights`; the vendor only has HIDL light@2.0. `tools/lights/` has a Java shim (app_process, hand-parsed AIDL parcels, writes `/sys/class/leds/lcd-backlight/brightness`), its rc, and the vintf fragment `/vendor/etc/vintf/manifest/android.hardware.light-aidl.xml`.
+- **Bluetooth**: after the HCI 0x0c5a status is ignored, `btm_sec_dev_reset` aborts with "only controllers with SSP is supported"; the `tbz` at 0xabaf10 is nopped.

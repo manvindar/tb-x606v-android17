@@ -19,10 +19,13 @@ and Settings and the launcher open. It is slow (load average ~25 right after boo
 | eBPF loader, `netd`, ConnectivityService (bind-mounted patched binaries and jars) | works |
 | `zygote`, `system_server` (stable for minutes), SurfaceFlinger, PowerVR GPU, SystemUI, Launcher3, Settings | works |
 | Power HAL, PQ HAL, camera/sensor service startup (libbinder frozen-callback patch) | works |
-| Bluetooth | in progress: HCI `0x0c5a` fatal replaced by an ignore branch; `com.android.bluetooth` stays up but the stack was still `BLE_TURNING_ON` 40 s after enable |
+| Bluetooth | in progress: HCI 0x0c5a status ignored and the SSP check nopped; not yet verified that the stack turns on |
 | Audio output | not working: `audioserver` is stable but has no outputs (needs a 5.0 client/HAL shim) |
 | Camera capture | not verified |
-| lmkd | stub only (AMS logs "Failed to connect to lmkd") |
+| lmkd | replaced by a small in-kernel-LMK daemon (`tools/lmkd`); works |
+| Brightness | works through a Java AIDL lights shim (`tools/lights`) |
+| Wi-Fi | connects (BpfNetMaps local-net methods stubbed) |
+| Speed | needs `tools/scripts/dexopt_all.sh` once; Settings then opens in under a second |
 
 The earlier attempt on the OSS 4.9.117 kernel is abandoned: its PowerVR driver rejects the vendor GPU firmware. Details of every
 patch and the order they were found are in `docs/ANALYSIS.md`.

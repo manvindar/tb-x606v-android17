@@ -9,4 +9,8 @@ for a, t, x in ((0xc24528, 0xc25738, 0xc24554), (0xc248f0, 0xc25770, 0xc249ac)):
     o = struct.unpack_from('<I', d, a)[0]
     assert (o & 0xfff80000) == 0x36000000 and (o & 0x1f) == 20 and a + ((o >> 5) & 0x3fff) * 4 == t, hex(o)
     struct.pack_into('<I', d, a, 0x14000000 | (((x - a) >> 2) & 0x3ffffff))
+# btm_sec_dev_reset (0xabaedc): `tbz w0,#0,<fatal "only controllers with SSP is supported">` after Controller::SupportsSimplePairing(); the check fails
+# with the features read through the ignored status, so accept it (the chip is BT 5.0 and does support SSP).
+assert struct.unpack_from('<I', d, 0xabaf10)[0] == 0x36000000 | (((0xabafec - 0xabaf10) >> 2) << 5) | 0
+struct.pack_into('<I', d, 0xabaf10, 0xd503201f)
 open(sys.argv[2], 'wb').write(d); print('patched ->', sys.argv[2])

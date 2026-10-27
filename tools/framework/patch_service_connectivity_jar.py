@@ -23,6 +23,12 @@ j = raw.find(PAT2); raw[j + 8:j + 12] = bytes.fromhex('2900' + '1900')       # g
 PAT3 = bytes.fromhex('7100141900000e00')   # invoke-static BpfEventPoller.nativeInitLoopbackEventConsumer ; return-void
 assert raw.count(PAT3) == 1, raw.count(PAT3)
 raw[raw.find(PAT3):raw.find(PAT3) + 6] = bytes(6)
+# (4) kernel 4.9 has none of the local_net_* maps (see 1), so every BpfNetMaps method that writes them throws NPE on the ConnectivityServiceThread when
+#     wifi connects (updateLocalNetworkAddresses -> addLocalNetAccess -> incrementLnpGenerationId) and kills system_server. Make them `return-void`.
+#     Offsets are the code_item of each method (dexdump -d of this classes.dex); the first instruction is 16 bytes in.
+for off, first in ((0x08fb9c, '5410'), (0x091124, None), (0x0911c8, None), (0x08f1f0, None), (0x08f2ec, None), (0x08f390, None),
+                   (0x090194, None), (0x090298, None), (0x09031c, None)):
+    raw[off + 16:off + 20] = bytes.fromhex('0e000000')   # return-void + nop: the first insn of each is 2 code units
 fs = struct.unpack_from('<I', raw, 0x20)[0]
 raw[12:32] = hashlib.sha1(bytes(raw[32:fs])).digest()
 struct.pack_into('<I', raw, 8, zlib.adler32(bytes(raw[12:fs])) & 0xffffffff)
