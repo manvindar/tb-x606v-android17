@@ -27,7 +27,7 @@ Companion repositories:
 | Audio output | works through Android 16's `audioserver` and library closure run privately (`tools/audio`); a 440 Hz test tone plays, other apps not yet checked |
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
 | Cellular (calls, SMS, mobile data) | not working, see below |
-| USB file transfer, tethering | probably not working, untested |
+| USB file transfer | works (checked with libmtp); tethering untested |
 | DRM (Widevine) | not provisioned |
 
 First boot is slow until the apps are compiled. The GSI ships no odex, so every app runs from its APK. Run `tools/scripts/dexopt_all.sh`
@@ -39,8 +39,8 @@ From a read of the logs after a clean boot (no crashes, ANRs or service restarts
 
 - **Cellular.** The phone process reports "out of service" with an unknown radio HAL version, and Settings throws `UnsupportedOperationException` for the IMEI. Android 17's telephony does not
   accept the Android 10 vendor radio HAL (`mtkfusionrild`). Needs a SIM to confirm; fixing it is a project of its own.
-- **USB mode switching.** `UsbDeviceManager` logs "usb gadget hidl hal service not found" and "Failed to open control for ptp". The vendor only has `android.hardware.usb@1.1` (port roles), no gadget HAL.
-  adb works because init sets that up itself. File transfer and USB tethering are untested.
+- **USB.** `UsbDeviceManager` logs "usb gadget hidl hal service not found" (the vendor only has `android.hardware.usb@1.1`, port roles) and falls back to its legacy handler, which drives `sys.usb.config`.
+  Checked: switching to file transfer works, and `libmtp` on the Mac lists the tablet's storage and folders. USB tethering is untested.
 - **Widevine** fails to provision (`ERROR_DRM_CANNOT_HANDLE`), so protected streaming will probably not play.
 - **Harmless noise.** fs-verity setup fails on every permissions write (the kernel has no verity), the GPU memory BPF map and `bpf_system_stats` ringbuf iterator are missing, and fingerprint, face and a
   few other managers are absent on this hardware. The Wi-Fi data-stall monitor logs "ignore this poll" constantly.
@@ -54,6 +54,12 @@ The default is the Pixel 10 Gemini animation from [docbt/GeminiBootAnimation](ht
 `tools/boot-animation/make_gemini_fit.py` scales it to the 1200x1920 panel, centres it on black and reduces it to a 128-colour palette (13 MB, stored zip). Install it as
 `/system/product/media/bootanimation.zip`. Other candidates that were previewed: ArrowOS (the leftover from the Android 16 customisation), a generated galaxy, the Lineage original,
 and Pixel-style and Lenovo Yoga Smart Tab animations from the [Android Boot Animation Collection](https://github.com/tntapple219/Android-Boot-Animation-Collection) (unlicensed, not included).
+
+## Serial console warning
+
+The GSI image is built debuggable here, so `init.rc` started the UART `console` shell and ActivityManager posted "Serial console enabled, performance is impacted" at every boot
+(it checks `init.svc.console`). `init.rc` now starts the console only when `persist.sys.console=1`. The ROM Tuner (Behaviour > Serial console shell) switches it on and off at runtime;
+`build/build_image17.py` applies the same `init.rc` edit.
 
 ## Why the stock kernel
 

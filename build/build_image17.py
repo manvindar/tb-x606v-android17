@@ -120,6 +120,11 @@ put(tmpfile('lmkd', '#!/system/bin/sh\n# Android 17 lmkd needs PSI/memcg (absent
                     '# The in-kernel lowmemorykiller does the work. This stub only keeps the service and its socket alive.\nexec /system/bin/toybox sleep 2000000000\n'),
     '/system/bin/lmkd', '755', 0, LMKD_L)
 
+# 10 init.rc starts the UART console on debuggable builds and ActivityManager then warns "Serial console enabled, performance is impacted" every boot;
+#    start it only when persist.sys.console=1 (ROM Tuner: Serial console shell)
+rc = cat(a.out, '/system/etc/init/hw/init.rc').decode(); old = 'on init && property:ro.debuggable=1\n    start console\n'
+if old in rc: put(tmpfile('init.rc', rc.replace(old, 'on property:persist.sys.console=1\n    start console\n')), '/system/etc/init/hw/init.rc', '644')
+
 # optional: ROM Tuner and boot diagnostics from the Android 16 port repo. The 'su' SELinux domain does not exist in a user-build policy.
 R = os.path.join(a.port_repo, 'rom-tuner'); media = '/system/product/media'
 def rc_fix(path): return open(path).read().replace('u:r:su:s0', 'u:r:init:s0')
