@@ -362,6 +362,8 @@ if a.pixel:
     # AOSP Provision is a second SETUP_WIZARD activity: with two, PackageManager names no setup wizard package and the Google wizard never gets the `setup` permissions (NETWORK_SETUP_WIZARD: wifi page crashes)
     cmds.append('rm /system/system_ext/priv-app/Provision/Provision.apk')
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
+    put(os.path.join(TOOLS, 'pixel', 'wizard_lock_skip.sh'), '/system/bin/wizard_lock_skip.sh', '755')
+    put(os.path.join(TOOLS, 'pixel', 'zz_wizard_lock_skip.rc'), '/system/etc/init/zz_wizard_lock_skip.rc', '644')
     put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
 if a.pixel_tablet:
     print('9c Pixel Tablet layer')
