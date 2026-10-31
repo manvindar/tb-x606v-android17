@@ -32,13 +32,8 @@ PKGS = [
     ('product', '/app/SoundPickerPrebuilt_3.4', 'app/SoundPickerPrebuilt'),
     ('product', '/app/PixelThemesStub2022_and_newer', 'app/PixelThemesStub'),
     ('product', '/app/ModuleMetadataGoogle', 'app/ModuleMetadataGoogle'),
-    # Google's own services stack of the Pixel image instead of MindTheGapps (build without --gapps): Play services, Play Store, Services Framework, the Google app (search bar, assistant),
-    # At a Glance and weather, Digital Wellbeing, config updater, partner setup
-    ('product', '/priv-app/PrebuiltGmsCore', 'priv-app/PrebuiltGmsCore'),
-    ('product', '/priv-app/Phonesky', 'priv-app/Phonesky'),
-    ('system_ext', '/priv-app/GoogleServicesFramework', 'priv-app/GoogleServicesFramework'),
-    ('product', '/priv-app/ConfigUpdater', 'priv-app/ConfigUpdater'),
-    ('product', '/priv-app/PartnerSetupPrebuilt', 'priv-app/PartnerSetupPrebuilt'),
+    # The Pixel image has no Play services base APK to take (com.google.android.gms is a system APEX there; PrebuiltGmsCore holds only its modules), so Play services, Play Store and the Services Framework
+    # come from MindTheGapps (build with --gapps). On top of them: the Google app (search bar, assistant), At a Glance and weather, Digital Wellbeing
     ('product', '/priv-app/Velvet', 'priv-app/Velvet'),
     ('product', '/priv-app/DevicePersonalizationAiAiPrebuiltPixelTablet2023', 'priv-app/DevicePersonalizationAiAiPrebuilt'),
     ('product', '/priv-app/WeatherPixelPrebuilt_10008663', 'priv-app/WeatherPixelPrebuilt'),
