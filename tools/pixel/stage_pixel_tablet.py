@@ -31,11 +31,27 @@ PKGS = [
     ('product', '/app/PixelWallpapers2023Tablet', 'app/PixelWallpapers2023Tablet'),
     ('product', '/app/SoundPickerPrebuilt_3.4', 'app/SoundPickerPrebuilt'),
     ('product', '/app/PixelThemesStub2022_and_newer', 'app/PixelThemesStub'),
-    ('product', '/app/ModuleMetadataGoogle', 'app/ModuleMetadataGoogle'),                 # config_defaultModuleMetadataProvider of the Pixel overlay (system_server aborts without it)
+    ('product', '/app/ModuleMetadataGoogle', 'app/ModuleMetadataGoogle'),
+    # Google's own services stack of the Pixel image instead of MindTheGapps (build without --gapps): Play services, Play Store, Services Framework, the Google app (search bar, assistant),
+    # At a Glance and weather, Digital Wellbeing, config updater, partner setup
+    ('product', '/priv-app/PrebuiltGmsCore', 'priv-app/PrebuiltGmsCore'),
+    ('product', '/priv-app/Phonesky', 'priv-app/Phonesky'),
+    ('system_ext', '/priv-app/GoogleServicesFramework', 'priv-app/GoogleServicesFramework'),
+    ('product', '/priv-app/ConfigUpdater', 'priv-app/ConfigUpdater'),
+    ('product', '/priv-app/PartnerSetupPrebuilt', 'priv-app/PartnerSetupPrebuilt'),
+    ('product', '/priv-app/Velvet', 'priv-app/Velvet'),
+    ('product', '/priv-app/DevicePersonalizationAiAiPrebuiltPixelTablet2023', 'priv-app/DevicePersonalizationAiAiPrebuilt'),
+    ('product', '/priv-app/WeatherPixelPrebuilt_10008663', 'priv-app/WeatherPixelPrebuilt'),
+    ('product', '/priv-app/WellbeingPrebuilt', 'priv-app/WellbeingPrebuilt'),
+    # the Pixel setup wizard (shown after a data wipe) with its tablet overlays
+    ('system_ext', '/priv-app/SetupWizardPixelPrebuilt_versioned', 'priv-app/SetupWizardPixelPrebuilt'),
+    ('product', '/priv-app/SetupWizardPrebuilt_versioned', 'priv-app/SetupWizardPrebuilt'),                 # config_defaultModuleMetadataProvider of the Pixel overlay (system_server aborts without it)
 ]
 # files and directories copied as they are (dest relative to /system/<partition>/)
 FILES = [('product', '/overlay/PixelConfigOverlayCommon.apk', 'overlay/PixelConfigOverlayCommon.apk'),
          ('product', '/overlay/LargeScreenConfigOverlay.apk', 'overlay/LargeScreenConfigOverlay.apk'),
+         ('product', '/overlay/PixelSetupWizardOverlayTangorpro.apk', 'overlay/PixelSetupWizardOverlayTangorpro.apk'),
+         ('product', '/overlay/PixelSetupWizardOverlayExpressive.apk', 'overlay/PixelSetupWizardOverlayExpressive.apk'),
          ('product', '/etc/fonts_customization.xml', 'etc/fonts_customization.xml'),
          ('product', '/media/bootanimation.zip', 'media/bootanimation-pixel.zip'),
          ('product', '/media/bootanimation-dark.zip', 'media/bootanimation-pixel-dark.zip')]
