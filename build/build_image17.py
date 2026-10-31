@@ -390,7 +390,15 @@ if priv_apks:
     r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'pixel', 'check_privapp_offline.py'), '--perm-apk', wp('framework-res.apk'), '--perm-apk', wp('SystemUI.apk')]
                        + [x for f in allow_xmls for x in ('--allow', f)] + [x for f in priv_apks for x in ('--apk', f)], capture_output=True, text=True, env=dict(os.environ, BUILD_TOOLS=BT))
     print(r.stdout.rstrip())
-    if r.returncode: sys.exit('priv-app permissions are not allowlisted (see above): add them to an allowlist xml (check_privapp_offline.py --write-extra), or the tablet will not boot')
+    if r.returncode and a.dev_tools:
+        # development builds: allowlist what the apps ask for (commit the generated file as tools/pixel/privapp-permissions-pixeltablet-extra-a17.xml for a release build)
+        extra = wp('extra_allow.xml')
+        subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'pixel', 'check_privapp_offline.py'), '--perm-apk', wp('framework-res.apk'), '--perm-apk', wp('SystemUI.apk')]
+                       + [x for f in allow_xmls for x in ('--allow', f)] + [x for f in priv_apks for x in ('--apk', f)] + ['--write-extra', extra], capture_output=True, text=True, env=dict(os.environ, BUILD_TOOLS=BT))
+        shutil.copyfile(extra, os.path.join(os.path.dirname(a.out) or '.', 'privapp-extra-allow.xml'))
+        for part in ('system_ext', 'product'): put(extra, f'/system/{part}/etc/permissions/privapp-permissions-pixeltablet-extra-a17.xml', '644')
+        print('  --dev-tools: the missing entries were allowlisted from the generated file (privapp-extra-allow.xml next to the image)')
+    elif r.returncode: sys.exit('priv-app permissions are not allowlisted (see above): add them to an allowlist xml (check_privapp_offline.py --write-extra), or the tablet will not boot')
 
 print('writing the image (debugfs)'); apply(a.out)
 
