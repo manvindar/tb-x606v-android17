@@ -380,7 +380,8 @@ if a.pixel_tablet:
     priv_apks += [os.path.join(st, f) + (':system_ext' if f.startswith('system_ext/') else ':product') for f in staged if '/priv-app/' in f and f.endswith('.apk')]
     # Pixel boot animation: the default slot of ROM Tuner ("gemini") and the plain file
     for pz, dsts in (('product/media/bootanimation-pixel.zip', ('bootanimation.zip', 'bootanimation-gemini.zip')), ('product/media/bootanimation-pixel-dark.zip', ('bootanimation-dark.zip',))):
-        for d in dsts: put(os.path.join(st, pz), '/system/product/media/' + d, '644')
+        fitted = wp(os.path.basename(pz)); py(os.path.join('pixel', 'fit_bootanimation.py'), os.path.join(st, pz), fitted)    # canvas 2560x1600 -> this panel (1200x1920), see the script
+        for d in dsts: put(fitted, '/system/product/media/' + d, '644')
     # AOSP Provision is a second SETUP_WIZARD activity: with two, PackageManager names no setup wizard package and the Google wizard never gets the `setup` permissions (NETWORK_SETUP_WIZARD: wifi page crashes)
     cmds.append('rm /system/system_ext/priv-app/Provision/Provision.apk')
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
