@@ -22,9 +22,9 @@ on:
     tags: ['a17-v*']
 
 env:
-  # DP11.261016.003 (October 29, 2026). The previous build, DP11.261002.005: aosp_arm64-exp-DP11.261002.005-16594701-a359a50b.zip, zip sha256 a359a50b..., pass it through the inputs
-  GSI_URL: ${{ inputs.gsi_url || 'https://dl.google.com/developers/android/cinnamonbun/images/gsi/aosp_arm64-exp-DP11.261016.003-16708287-d735a3b1.zip' }}
-  GSI_ZIP_SHA256: ${{ inputs.gsi_zip_sha256 || 'd735a3b11fe1b76a736f325f5500f7211167642fe2ed39dae0cf530d1cf51436' }}
+  # DP11.261002.005, the build the patches were developed and tested on. A newer build can be passed through the gsi_url / gsi_zip_sha256 inputs (see the exp/ branches)
+  GSI_URL: ${{ inputs.gsi_url || 'https://dl.google.com/developers/android/cinnamonbun/images/gsi/aosp_arm64-exp-DP11.261002.005-16594701-a359a50b.zip' }}
+  GSI_ZIP_SHA256: ${{ inputs.gsi_zip_sha256 || 'a359a50b6eb8e9f63168e928bd14167603225e92cd8605ec86a4bda6591fc13b' }}
   DONOR_URL: https://sourceforge.net/projects/misterztr-gsi/files/LineageOS/Android%2016/LineageOS-23.2-20260524-GAPPS-EXT4-GSI.7z/download
   DONOR_7Z_SHA256: 22b3c069445cc3d54819361a1636f7b27ff455dc547f300b868cecddb1b2e22d
   DONOR_IMG: LineageOS-23.2-20260524-GAPPS-EXT4-GSI.img

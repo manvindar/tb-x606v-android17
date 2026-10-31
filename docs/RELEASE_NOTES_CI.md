@@ -1,6 +1,6 @@
 # Android 17 (DP11) for the Lenovo Tab M10 FHD Plus (TB-X606V): built by GitHub Actions
 
-Built from public inputs by `.github/workflows/build-image.yml` with `build/build_image17.py`: Google's Android 17 GSI (`aosp_arm64`, the build named in the release title; the workflow default is DP11.261016.003, and `gsi_url` / `gsi_zip_sha256` select another), the LineageOS 23.2 GSI as donor for the Android 16 audio stack and VNDK 29,
+Built from public inputs by `.github/workflows/build-image.yml` with `build/build_image17.py`: Google's Android 17 GSI (`aosp_arm64`, the build named in the release title; the workflow default is DP11.261002.005, and `gsi_url` / `gsi_zip_sha256` select another), the LineageOS 23.2 GSI as donor for the Android 16 audio stack and VNDK 29,
 and MindTheGapps for the gapps image. Every patch in `tools/` is applied by the script; nothing is edited by hand.
 
 ## Files
