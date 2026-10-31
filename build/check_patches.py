@@ -35,6 +35,7 @@ CHECKS = [
     ('libc/patch_libc.py', f'apex:{RT}:/bin/linker64'), ('libc/patch_libc.py', f'apex:{RT}:/bin/linker'),
     ('bpf/patch_binaries.py netbpfload', f'apex:{T}:/bin/netbpfload'), ('bpf/patch_binaries.py netd_updatable', f'apex:{T}:/lib64/libnetd_updatable.so'),
     ('bpf/patch_binaries.py service_connectivity', f'apex:{T}:/lib64/libservice-connectivity.so'), ('framework/patch_service_connectivity_jar.py', f'apex:{T}:/javalib/service-connectivity.jar'),
+    ('NETD_O', f'apex:{T}:/etc/bpf/mainline/netd.o'),
     ('bpf/patch_bluetooth.py', 'apex:/system/apex/com.android.bt.capex:/lib64/libbluetooth_jni.so'),
     ('libc/patch_libui.py', 'apex:/system/apex/com.android.media.swcodec.capex:/lib64/libui.so'), ('libc/patch_libui.py', 'apex:/system/apex/com.android.media.swcodec.capex:/lib/libui.so'),
 ]
@@ -43,7 +44,11 @@ for tool, src in CHECKS:
     t = tool.split(); f = get(src); name = f'{t[0]:48} {src.replace("/system/apex/", "")}'
     if not f: print(f'MISS {name}'); fails += 1; continue
     out = os.path.join(W, 'out.bin')
-    r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, t[0]), *t[1:], f, out], capture_output=True, text=True)
+    if t[0] == 'NETD_O':       # two steps: LRU_HASH -> HASH in the BTF, then in .android_maps
+        r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'bpf/btfmaps.py'), f, '--patch', out + '.btf'], capture_output=True, text=True)
+        if r.returncode == 0: r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'bpf/patch_netd_o.py'), out + '.btf', out], capture_output=True, text=True)
+    else:
+        r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, t[0]), *t[1:], f, out], capture_output=True, text=True)
     if src.endswith('services.jar') and r.returncode == 0:    # the location patch is chained after it
         r2 = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'framework/patch_location_provider.py'), out, out + '.2'], capture_output=True, text=True)
         if r2.returncode: r = r2; name += '  (location patch)'
