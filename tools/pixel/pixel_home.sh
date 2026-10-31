@@ -26,5 +26,7 @@ has com.google.android.apps.nbu.files && pm disable --user 0 com.android.documen
 # it draws its own rounded Pixel search pill instead.
 pm disable-user --user 0 com.android.quicksearchbox >/dev/null 2>&1
 # shorter window and transition animations: the GE8320 drops frames in long ones, 0.6x feels quicker and costs nothing (ROM Tuner or Settings > Developer options change it)
+# ROM Tuner keeps the value in its state file and re-applies it at every boot, so change it there too
+sed -i 's/^anim_scale=.*/anim_scale=0.6/' /data/local/tmp/tuner.state 2>/dev/null
 for k in window_animation_scale transition_animation_scale animator_duration_scale; do settings put global $k 0.6; done
 touch $M
