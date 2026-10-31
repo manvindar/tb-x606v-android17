@@ -6,6 +6,8 @@ F=${DEXOPT_FORCE--f}
 for p in com.android.systemui com.google.android.apps.nexuslauncher com.android.launcher3 com.android.settings com.google.android.apps.wallpaper.pixel; do
   pm path $p >/dev/null 2>&1 && { echo $p; cmd package compile -m speed $F $p; }
 done
+# a compiled app only runs the new code after its process restarts (first boot job: nobody is using the shade yet, the setup wizard and Settings survive)
+[ -z "$F" ] && killall com.android.systemui com.google.android.apps.nexuslauncher 2>/dev/null
 for p in com.google.android.gms com.android.vending com.google.android.gsf com.google.android.apps.maps com.google.android.youtube com.google.android.apps.wallpaper com.google.android.apps.nexuslauncher com.google.android.contacts com.google.android.calendar com.google.android.calculator com.google.android.deskclock com.google.android.apps.nbu.files; do
   pm path $p >/dev/null 2>&1 && { echo $p; cmd package compile -m speed $F $p; }
 done

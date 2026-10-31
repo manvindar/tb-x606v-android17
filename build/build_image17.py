@@ -264,6 +264,7 @@ for rc in ('bpf/00_bpf_bind.rc', 'bpf/00_aee_off.rc', 'zz_a17_rt.rc'): put(os.pa
 # compiles the apps in speed mode by itself after a data wipe (CI images carry no compiled code); skips what is already compiled
 put(os.path.join(TOOLS, 'firstboot', 'firstboot_dexopt.sh'), '/system/bin/firstboot_dexopt.sh', '755'); put(os.path.join(TOOLS, 'scripts', 'dexopt_all.sh'), '/system/bin/dexopt_all.sh', '755')
 put(os.path.join(TOOLS, 'firstboot', 'zz_firstboot_dexopt.rc'), '/system/etc/init/zz_firstboot_dexopt.rc', '644')
+put(os.path.join(TOOLS, 'firstboot', 'odex_bind.sh'), '/system/bin/odex_bind.sh', '755'); put(os.path.join(TOOLS, 'firstboot', 'zz_odex_bind.rc'), '/system/etc/init/zz_odex_bind.rc', '644')
 rc = cat(S, '/system/etc/init/netbpfload.rc').decode(); assert 'reboot_on_failure reboot,netbpfload-missing' in rc
 replace(S, '/system/etc/init/netbpfload.rc', tmpf('netbpfload.rc', ''.join(l for l in rc.splitlines(True) if 'reboot_on_failure reboot,netbpfload-missing' not in l)))
 

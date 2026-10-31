@@ -25,4 +25,6 @@ has com.google.android.apps.nbu.files && pm disable --user 0 com.android.documen
 # The Pixel Launcher puts a search bar on the home screen. Without the Google app it picks AOSP's old QuickSearchBox widget (serif "Google" logo in a flat frame); with that package disabled
 # it draws its own rounded Pixel search pill instead.
 pm disable-user --user 0 com.android.quicksearchbox >/dev/null 2>&1
+# shorter window and transition animations: the GE8320 drops frames in long ones, 0.6x feels quicker and costs nothing (ROM Tuner or Settings > Developer options change it)
+for k in window_animation_scale transition_animation_scale animator_duration_scale; do settings put global $k 0.6; done
 touch $M

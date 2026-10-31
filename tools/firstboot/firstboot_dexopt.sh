@@ -18,7 +18,7 @@ M=/data/local/tmp/.dexopt_done
 [ -f $M ] && exit 0
 export DEXOPT_FORCE=""
 echo "$(date) firstboot dexopt pass 1" >> /data/local/tmp/dexopt.log
-sleep 180
+sleep 60
 sh /system/bin/dexopt_all.sh >> /data/local/tmp/dexopt.log 2>&1
 sleep 2700
 echo "$(date) firstboot dexopt pass 2" >> /data/local/tmp/dexopt.log
