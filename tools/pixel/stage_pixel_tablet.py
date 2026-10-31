@@ -17,6 +17,9 @@ APPS = [('system_ext', '/priv-app/SystemUITitan/SystemUITitan.apk', 'priv-app/Sy
         ('system_ext', '/priv-app/NexusLauncherRelease/NexusLauncherRelease.apk', 'priv-app/NexusLauncherRelease/NexusLauncherRelease.apk')]
 PLAIN = [('product', '/overlay/PixelConfigOverlayCommon.apk', 'overlay/PixelConfigOverlayCommon.apk'),          # recents component = Pixel Launcher, fonts, corner radii, Google services
          ('product', '/overlay/LargeScreenConfigOverlay.apk', 'overlay/LargeScreenConfigOverlay.apk'),
+         # PixelConfigOverlayCommon points config_defaultModuleMetadataProvider at this package; without it ModuleInfoProvider never loads and system_server dies in
+         # AppRestrictionController ("Call to getInstalledModules before metadata loaded")
+         ('product', '/app/ModuleMetadataGoogle/ModuleMetadataGoogle.apk', 'app/ModuleMetadataGoogle/ModuleMetadataGoogle.apk'),
          ('product', '/etc/fonts_customization.xml', 'etc/fonts_customization.xml'),
          ('product', '/etc/sysconfig/google-hiddenapi-package-whitelist.xml', 'etc/sysconfig/google-hiddenapi-package-whitelist.xml')]
 FONT_DIR = ('product', '/fonts')
