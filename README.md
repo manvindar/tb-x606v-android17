@@ -217,6 +217,22 @@ Each item came from a real failure. `docs/ANALYSIS.md` has the evidence and the 
 - **Bluetooth** (`tools/bpf/patch_bluetooth.py`): the controller answers an optional command with an unknown-command status that the stack treats as fatal, and
   then a check for Secure Simple Pairing aborts. Both branches are patched.
 
+## Pixel Tablet layer (optional, built on your own computer)
+
+The tablet can run the Pixel Tablet's own system apps on top of the GSI: SystemUI (the Pixel Tablet build, `SystemUITitan`), Settings (`SettingsGoogle`), the Pixel Launcher, the Pixel wallpaper picker and wallpapers, Messages, Clock, Contacts, Calendar,
+Calculator, Files, Photos, Gboard, the Google app (search bar), Play services and Play Store of the Pixel image, At a Glance, Digital Wellbeing, the Pixel setup wizard, the Pixel fonts and sounds, the Pixel config overlays and the Pixel boot animation.
+Everything comes from Google's factory image of the Pixel Tablet (`tangorpro`) **of the same Android 17 build as the GSI** (resource ids and hidden APIs only line up on the same build), so it needs the DP11.261016.003 GSI.
+The Google files are not redistributable, so no release contains them: you build the layer from your own download.
+```sh
+# 1. Google's Pixel Tablet factory image DP11.261016.003 (tangorpro_beta-dp11.261016.003-factory-*.zip, developer.android.com/about/versions/17/qpr3/download)
+python3 tools/pixel/stage_pixel_tablet.py tangorpro_beta-dp11.261016.003-factory-2ae15424.zip pixel_stage --build-tools $ANDROID_HOME/build-tools/35.0.0
+# 2. the image (no --gapps: the Pixel layer carries its own Play services and Play Store); --dev-tools adds the boot watchdog and boot logging, leave it out for daily use
+python3 build/build_image17.py --gsi system.img --donor LineageOS-23.2-GSI.img --out system-a17-pixel.img --port-repo ../tb-x606v-android16-port --pixel-tablet pixel_stage
+```
+`stage_pixel_tablet.py` re-signs SystemUI, Settings, the launcher and the wallpaper picker with the public AOSP platform test key (the GSI's platform certificate); every other app keeps Google's signature. The builder checks that no priv-app asks for a privileged permission that
+no allowlist grants (a miss makes `system_server` abort at boot). When you flash it over existing data, clear `/data/system/package_cache` from TWRP first (or wipe).
+`docs/PIXEL.md` lists what each boot failure looked like and how it was fixed. This lives on the `exp/pixel-tablet` branch.
+
 ## Build the image yourself
 
 `build/build_image17.py` turns Google's GSI into the tested image offline, with debugfs (no mount, runs on macOS and Linux). It applies every patch in `tools/` (libc and linkers, libui, libbinder, services.jar, the BPF
