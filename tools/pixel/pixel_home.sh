@@ -25,6 +25,9 @@ has com.google.android.apps.nbu.files && pm disable --user 0 com.android.documen
 # The Pixel Launcher puts a search bar on the home screen. Without the Google app it picks AOSP's old QuickSearchBox widget (serif "Google" logo in a flat frame); with that package disabled
 # it draws its own rounded Pixel search pill instead.
 pm disable-user --user 0 com.android.quicksearchbox >/dev/null 2>&1
+# After a Google sign in, Play services opens Google services and that calls the Backup opt-in of com.google.android.apps.restore; its result sends the flow back to
+# "Account added", which opens Google services again, forever. With the package disabled Google services stays on screen. Backup by Google One is not available.
+has com.google.android.apps.restore && pm disable-user --user 0 com.google.android.apps.restore >/dev/null 2>&1
 # shorter window and transition animations: the GE8320 drops frames in long ones, 0.6x feels quicker and costs nothing (ROM Tuner or Settings > Developer options change it)
 # ROM Tuner keeps the value in its state file and re-applies it at every boot, so change it there too
 sed -i 's/^anim_scale=.*/anim_scale=0.6/' /data/local/tmp/tuner.state 2>/dev/null
