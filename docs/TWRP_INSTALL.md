@@ -22,7 +22,7 @@ It never writes `recovery`, `boot`, `lk`, `nvram` or any other partition.
 
 ## Compiling by itself
 
-Compiling needs a running Android (the ART compiler runs on the tablet), so TWRP cannot do it. Instead every image now carries a one-shot job, `firstboot_dexopt.sh` with `zz_firstboot_dexopt.rc`: three minutes after the first boot it compiles the Google apps and the system apps in speed mode (`dexopt_all.sh`, 10 to 15 minutes, runs at background priority), and again 45 minutes later to catch apps the Play Store updated in between (an update resets them to interpreted code). Apps that are already compiled are skipped. It stops after the second pass (`/data/local/tmp/.dexopt_done`). Log: `/data/local/tmp/dexopt.log`.
+Compiling needs a running Android (the ART compiler runs on the tablet), so TWRP cannot do it. Instead every image now carries a one-shot job, `firstboot_dexopt.sh` with `zz_firstboot_dexopt.rc`: one minute after the first boot it compiles the Google apps and the system apps in speed mode (`dexopt_all.sh`, 10 to 15 minutes, runs at background priority), and again 45 minutes later to catch apps the Play Store updated in between (an update resets them to interpreted code). Apps that are already compiled are skipped. It stops after the second pass (`/data/local/tmp/.dexopt_done`). Log: `/data/local/tmp/dexopt.log`.
 To run it by hand from the computer: `tools/scripts/dexopt_on_tablet.sh`.
 
 ## Status

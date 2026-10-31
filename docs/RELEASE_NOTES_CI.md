@@ -22,8 +22,8 @@ Everything the tablet needed, found and fixed on the tablet itself: the Android 
 - **Dolby support in the installer:** the vendor edits now also remove the `deep_buffer` audio output, which is what made Dolby inaudible (Dolby's effect sits on the primary output only). Dolby Atmos itself is not in the image.
 
 ## Compiled apps
-These images carry **no precompiled app code** (compiling needs a booted tablet). Instead the image starts a one-time job three minutes after the first boot that compiles the Google apps and system apps in speed mode (10 to 15 minutes, background priority),
-and again about 45 minutes later for apps the Play Store updated in between. Until it is done the tablet is slow. To do it by hand: `tools/scripts/dexopt_on_tablet.sh`. Log: `/data/local/tmp/dexopt.log`.
+These images carry **no precompiled app code** (compiling needs a booted tablet). Instead the image starts a one-time job one minute after the first boot that compiles the Google apps and system apps in speed mode (10 to 15 minutes, background priority),
+and again about 45 minutes later for apps the Play Store updated in between. Until it is done the tablet is slow. The compiled code is written to `/data/odex` (bind mounted over each app's `oat` directory, because the system image is full), and the stale verify-only copies in `/data/dalvik-cache` are deleted so ART uses it. To do it by hand: `tools/scripts/dexopt_on_tablet.sh`. Log: `/data/local/tmp/dexopt.log`.
 The `v17-dp11-r1` and `r2` releases are dumps of a tested tablet and are already compiled (Play services excepted).
 
 ## Install (wipes all data)

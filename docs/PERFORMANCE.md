@@ -5,7 +5,7 @@ Measured on the tablet (TB-X606V, Android 17 GSI) with `dumpsys gfxinfo`, `simpl
 ## What helped
 
 1. **Compile everything in speed mode, Google apps included.** A GSI has no precompiled code for the apps it gets later, and Play services, Maps, YouTube and the Play Store are updated by the Play Store at first boot, which resets them to `verify` (interpreted, JIT only). The owner reported a large improvement after compiling.
-   `tools/scripts/dexopt_on_tablet.sh` does it (about 10 to 15 minutes, tablet connected over adb). Check with `dumpsys package <pkg> | grep "arm64: \\[status"`: you want `speed`.
+   The image now does this by itself one minute after the first boot (`firstboot_dexopt.sh`); `tools/scripts/dexopt_on_tablet.sh`, `dexopt_all.sh` and the ROM Tuner "Compile apps now" button run it by hand (about 10 to 15 minutes). Check with `dumpsys package <pkg> | grep "arm64: \\[status"`: you want `speed`.
    Redo it after the Play Store updates Play services, Maps or YouTube. Compiled Pixel Launcher and Google apps are not part of the public images (the code is built on the device), so every fresh flash needs this once.
 2. **Window blur off.** The Pixel Launcher drawer with blur on: 72% janky frames, median 57 ms. With `persist.sysui.disableBlur=1` (set by the builder; `settings put global disable_window_blurs 1` also works on a running system): 5 to 7% janky, median 19 ms.
 3. **USAP pool on.** GSIs ship `dalvik.vm.usap_pool_enabled=false`. The builder sets `true` (pre-forked app processes, faster app start). Needs a reboot.
@@ -24,7 +24,23 @@ Measured on the tablet (TB-X606V, Android 17 GSI) with `dumpsys gfxinfo`, `simpl
 
 ## Known slow spot
 
-The Android 17 notification shade (Compose scene container) takes about 110 ms per frame on this CPU; one thread, CPU bound. `aflags` cannot turn the flag off and the legacy shade is gone from the build.
+The Android 17 notification shade (Compose scene container) takes about 100 to 115 ms per frame on this GPU (PowerVR GE8320), 95 to 100% janky frames in a pull test. Findings:
+- It is the render thread (issuing draw commands for a full screen layer of rounded translucent cards), not the app's own code: compiling SystemUI moved the median from about 117 ms to about 101 ms, no more.
+- The GPU is already at its top clock (680 MHz). Turning the shade blur and the new shade flags off (`notification_shade_blur`, `scene_container`, edited in `/system/etc/aconfig/flag.val`, they read back as disabled after a reboot) changed nothing.
+- Making it faster means drawing less in the shade. Not attempted.
+
+## Compiled code: what went wrong and how it was found
+- `cmd package compile -m speed` reported Success for SystemUI but the process still ran interpreted. `/proc/<pid>/maps` showed the verify-only `.vdex` from `/data/dalvik-cache`, not the compiled `.odex`. Deleting the stale dalvik-cache copy made ART use the odex (`cmd package art dump <pkg>` then says `status=speed`). `dexopt_all.sh` does that for every app (`fixcache`).
+- Compiles of SystemUI and Settings failed on the full `/system` (ENOSPC in `oat/arm64`); the bind mounts from `tools/firstboot/odex_bind.sh` fix that (see the README).
+- The mount points must exist in the image: `/` is read only when `odex_bind.sh` runs in `post-fs-data`, so `mkdir` there fails. The builder creates `oat` in every app directory.
+
+## Other settings checked (MT8768, kernel 4.9.190), read from the kernel source and the live tablet
+Applied and exposed in ROM Tuner (Performance and Memory pages, all with stock values selectable; measured effect on the shade and drawer was within noise):
+- Touch boost (`/proc/perfmgr/tchbst/user/usrtch`): length 100/200/400/800 ms (default 400), clock step (default top), strength (default 100). Stock is 100 ms, step 2, 80.
+- `schedplus` clock behaviour: clock drop delay (`down_throttle_nsec`, default 20 ms, stock 4), rise delay (`up_throttle_nsec`, default 0) and headroom (`/sys/devices/system/cpu/eas/cap_margin_dvfs`, default 1536, stock 1280). They exist only while `schedplus` is the governor, so ROM Tuner writes them after every governor change.
+- Scheduler statistics off (`sched_schedstats`), deep idle (MCDI, `cpuidle/state1/disable`) as a switch (on by default), `watermark_scale_factor` (10/20/30), cached app limit (`max_cached_processes`), Wi-Fi country code (default CA, applied with `cmd wifi force-country-code` at every boot).
+Already optimal or not worth changing (checked on the tablet): eMMC 5.1 HS400 with command queueing and 1 MB read ahead, zram lz4 (about 3:1, half still free), `page-cluster` 0, GPU table (680/500/400 MHz, 680 locked), 60 Hz only display, `debug.sf.*` backpressure settings, FPSGO idle, ART dex2oat threads. `CONFIG_SLUB_DEBUG`, PSI, KSM and schedutil are not in the kernel; the cpuctl `uclamp` files are missing, so Android's uclamp task profiles are no-ops and the MediaTek `perfserv_*` boost nodes are the only boost path.
+New governors cannot be added without a kernel rebuild: the governors are built in, a `.ko` needs the exact 4.9.190 symbol versions (Lenovo's public source is 4.9.117 for the X606F), and a bad module panics the boot.
 
 ## Quick check after a flash
 
