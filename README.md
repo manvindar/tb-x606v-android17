@@ -48,7 +48,7 @@ empty vbmeta with the verification-disabled flag (made with `avbtool make_vbmeta
 seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed from the codec lists, and the AIDL lights declaration for the brightness shim.
 
 **Going back:** flash your backup (`fastboot flash system system.img` from the Android 10 firmware or from `backup_partitions.sh`, plus `vendor.img` if you want the vendor files back exactly) and wipe data.
-`tools/restore_stock_boot.md` covers a tablet that no longer reaches the bootloader. After a flash, `tools/scripts/dexopt_all.sh` is only needed for apps you install later.
+`tools/restore_stock_boot.md` covers a tablet that no longer reaches the bootloader. After a flash the image compiles its own apps (see "Compiled app code" below); `tools/scripts/dexopt_all.sh` is only needed for apps you install later, or the "Compile apps now" button in ROM Tuner.
 
 ## Screenshots
 
@@ -83,8 +83,12 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 | USB file transfer | works (checked with libmtp); tethering untested |
 | DRM (Widevine) | Netflix plays (secure video layer, audio output); Widevine level and maximum resolution not measured |
 
-First boot is slow until the apps are compiled. The GSI ships no odex, so every app runs from its APK. Run `tools/scripts/dexopt_all.sh`
-once (it takes a few minutes): Settings goes from about 50 s to under a second cold.
+First boot is slow until the apps are compiled. The GSI ships no odex, so every app runs from its APK. The image starts a one-time job one minute after boot that compiles the shade, launcher and Settings first and then the rest
+(10 to 15 minutes in all, log in `/data/local/tmp/dexopt.log`; ROM Tuner has a "Compile apps now" button and a "Recompile all apps" button for the same job). Settings goes from about 50 s to under a second cold.
+
+**Compiled app code** needed two fixes, both found on the tablet:
+- The system image is full (a few MB free) and ART writes the compiled code of a system app next to its APK, in `<app dir>/oat/arm64`. Compiling SystemUI (about 100 MB) failed with "No space left on device". The builder puts an empty `oat` directory in every app directory and `tools/firstboot/odex_bind.sh` (a service run in `post-fs-data`, before the package scan) bind mounts `/data/odex/<app>` over each one, so the compiled code lives in `/data` and survives until a wipe.
+- The first boot leaves a verify-only copy of every app in `/data/dalvik-cache`, and ART kept loading that copy instead of the compiled code (checked in `/proc/<pid>/maps`: the process mapped the dalvik-cache `.vdex`, never the speed `.odex`). `dexopt_all.sh` now deletes the stale copy for every app that has compiled code, so the next start of the process uses it.
 
 ## Known issues
 
@@ -232,7 +236,7 @@ python3 build/build_image17.py --gsi system.img --donor LineageOS-23.2-GSI.img -
 python3 build/verify_image.py system-a17-nogapps.img other.img          # file by file comparison (mode, owner, label, sha256)
 ```
 The same build runs on GitHub Actions (`.github/workflows/build-image.yml`, Actions tab, "Run workflow"; tick `publish` to attach the images to a release). It produces `*-nodexopt.img.xz` files:
-the images have **no compiled app code** because `dex2oat` needs a booted tablet. They carry a one-time first-boot job (`zz_firstboot_dexopt.rc`) that compiles the apps in the background three minutes after boot (10 to 15 minutes, again after about 45 minutes), or run `tools/scripts/dexopt_on_tablet.sh` yourself. The `v17-dp11-r1` and `r2` releases are dumps of a tested tablet and are already compiled.
+the images have **no compiled app code** because `dex2oat` needs a booted tablet. They carry a one-time first-boot job (`zz_firstboot_dexopt.rc`) that compiles the apps in the background one minute after boot (10 to 15 minutes, again after about 45 minutes, into `/data/odex`), or run `tools/scripts/dexopt_on_tablet.sh` yourself. The `v17-dp11-r1` and `r2` releases are dumps of a tested tablet and are already compiled.
 Optional layers, both off by default and neither redistributable (so neither is in the CI images or the releases):
 - `--dolby DIR` adds Dolby Atmos from your own copy of the Lenovo firmware (`DaxUI.apk`, `daxService.patched.apk`, `com.dolby.daxservice.xml`). The vendor side (`libswdap.so` fix, `vendor_mac_permissions.xml`) lives in the vendor partition and survives system flashes.
 - `--pixel NikGapps-full-arm64-16-*.zip --pixel-launcher-apk PIXEL.apk` adds the Pixel layer described in `docs/PIXEL.md`: Pixel Launcher (rebuilt from the Android 17 APKMirror APK with `tools/pixel/build_pixel_launcher.sh`), Wallpaper & style, sounds,
