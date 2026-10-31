@@ -3,7 +3,9 @@
 # (the Google versions are installed next to them). Launcher3 stays installed: it is the recents provider. The marker keeps a later choice of home app from being overridden;
 # wiping /data runs this again.
 M=/data/local/tmp/.pixel_home_done
-[ -e $M ] && exit 0
+H=/data/local/tmp/.pixel_hub_done
+[ -e $M ] && [ -e $H ] && exit 0
+if [ ! -e $M ]; then
 P=com.google.android.apps.nexuslauncher
 i=0
 while [ $i -lt 60 ]; do
@@ -33,3 +35,14 @@ has com.google.android.apps.restore && pm disable-user --user 0 com.google.andro
 sed -i 's/^anim_scale=.*/anim_scale=0.6/' /data/local/tmp/tuner.state 2>/dev/null
 for k in window_animation_scale transition_animation_scale animator_duration_scale; do settings put global $k 0.6; done
 touch $M
+fi
+# Hub mode (com.google.assistant.hubui), once per /data with its own marker so that a system flashed over old data still gets it: Hub mode on, screen saver on with the Clocks dream,
+# started while charging or docked. The Pixel's TitanConfigOverlay (which carries these defaults) is not installed, it forces gesture navigation.
+if [ ! -e $H ] && pm list packages 2>/dev/null | grep -q 'package:com.google.assistant.hubui$'; then
+  settings put secure glanceable_hub_enabled 1
+  settings put secure screensaver_enabled 1
+  settings put secure screensaver_components com.google.assistant.hubui/com.google.assistant.hubui.dream.ClockFacesDreamService
+  settings put secure screensaver_activate_on_sleep 1
+  settings put secure screensaver_activate_on_dock 1
+  touch $H
+fi

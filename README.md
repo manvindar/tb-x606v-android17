@@ -228,6 +228,7 @@ Each item came from a real failure. `docs/ANALYSIS.md` has the evidence and the 
 
 The tablet can run the Pixel Tablet's own system apps on top of the GSI: SystemUI (the Pixel Tablet build, `SystemUITitan`), Settings (`SettingsGoogle`), the Pixel Launcher, the Pixel wallpaper picker and wallpapers, Messages, Clock, Contacts, Calendar,
 Calculator, Files, Photos, Gboard, the Google app (search bar), Play services and Play Store (MindTheGapps), At a Glance, Digital Wellbeing, the Pixel setup wizard, the Pixel fonts and sounds, the Pixel config overlays and the Pixel boot animation.
+Also in the layer: Hub mode (`com.google.assistant.hubui`, with the Pixel's glanceable hub overlays), the seven lock screen clock faces (`SystemUIClocks-*`), the Wallpaper & style theme packs (`CustomizationBundlePrebuilt`, emoji wallpaper) and Device Health Services (`TurboPrebuilt`, `TurboAdapter`). They were added after the last boot test, see the "Hub mode, clocks, theme packs, Device Health Services" part of `docs/PIXEL.md` for what is unverified.
 Not Pixel: the camera (AOSP Camera2; Pixel Camera needs Pixel camera libraries that the MediaTek HAL does not have), the phone app (the Pixel Tablet image has none) and Chrome.
 Everything comes from Google's factory image of the Pixel Tablet (`tangorpro`) **of the same Android 17 build as the GSI** (resource ids and hidden APIs only line up on the same build), so it needs the DP11.261016.003 GSI.
 The repository holds only the scripts, not Google's files: you can build the layer from your own download.

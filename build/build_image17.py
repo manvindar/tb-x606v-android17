@@ -372,7 +372,14 @@ if a.pixel_tablet:
     staged = sorted(os.path.relpath(os.path.join(r, f), st) for r, _, fs in os.walk(st) for f in fs)
     new = [f for f in staged if f not in ('system_ext/priv-app/SystemUI/SystemUI.apk', 'system_ext/priv-app/Settings/Settings.apk')]
     ensure_dirs('/system/' + f for f in new)
-    for f in new: put(os.path.join(st, f), '/system/' + f, '644', 0, 0, SYS)
+    for f in new: put(os.path.join(st, f), '/system/' + f, '644', 0, 0, LIB if '/lib64/' in f else SYS)
+    # Device Health Services: TurboAdapter's JNI lib lives in system_ext/lib64, the app links it from its own lib/arm64 as on the Pixel
+    if 'system_ext/lib64/libpowerstatshaldataprovider.so' in staged:
+        mkdir('/system/system_ext/priv-app/TurboAdapter/lib'); mkdir('/system/system_ext/priv-app/TurboAdapter/lib/arm64')
+        symlink('/system/system_ext/priv-app/TurboAdapter/lib/arm64/libpowerstatshaldataprovider.so', '/system_ext/lib64/libpowerstatshaldataprovider.so')
+    # allowlists the Pixel's own xml does not cover for the partition of the app: Hub mode (product, the Pixel xml has it too) and TurboAdapter (system_ext: the Pixel keeps it in system_ext/etc/permissions, which is not staged)
+    for x, part in (('privapp-permissions-hub-a17.xml', 'product'), ('privapp-permissions-turbo-a17.xml', 'system_ext')):
+        put(os.path.join(TOOLS, 'pixel', x), f'/system/{part}/etc/permissions/{x}', '644'); allow_xmls.append(os.path.join(TOOLS, 'pixel', x) + ':' + part)
     # the allowlist is read from the partition of the app: the launcher, SystemUI and Settings live in system_ext, so their extra entries go to /system/system_ext/etc/permissions
     put(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml'), '/system/system_ext/etc/permissions/privapp-permissions-pixeltablet-a17.xml', '644')
     allow_xmls.append(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml') + ':system_ext')
