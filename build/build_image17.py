@@ -288,6 +288,11 @@ print('8 lmkd, lights, console')
 replace(S, '/system/bin/lmkd', wp('lmkd'))
 rc = cat(S, '/system/etc/init/lmkd.rc').decode(); assert '    critical\n' in rc    # lmkd is critical: if it dies the tablet reboots
 replace(S, '/system/etc/init/lmkd.rc', tmpf('lmkd.rc', rc.replace('    critical\n', '', 1)))
+# cpustatsd asks init for the ambient capabilities BPF (39) and PERFMON (38); kernel 4.9 knows capabilities up to 37, init's prctl(PR_CAP_AMBIENT_RAISE) fails and the service
+# aborts and restarts every 5 s (a tombstone each time). SYS_NICE is the only one it needs here.
+if exists(S, '/system/etc/init/cpustatsd.rc'):
+    rc = cat(S, '/system/etc/init/cpustatsd.rc').decode()
+    if 'capabilities BPF SYS_NICE PERFMON' in rc: replace(S, '/system/etc/init/cpustatsd.rc', tmpf('cpustatsd.rc', rc.replace('capabilities BPF SYS_NICE PERFMON', 'capabilities SYS_NICE')))
 run('sh', os.path.join(TOOLS, 'lights', 'build.sh'), env=dict(os.environ, ANDROID_HOME=os.path.abspath(os.path.join(BT, '..', '..')), BUILD_TOOLS=BT))
 put(os.path.join(TOOLS, 'lights', 'out', 'lightsshim.jar'), '/system/etc/lightsshim.jar', '644')
 put(os.path.join(TOOLS, 'lights', 'lightsshim.sh'), '/system/bin/lightsshim.sh', '755'); put(os.path.join(TOOLS, 'lights', 'lightsshim.rc'), '/system/etc/init/lightsshim.rc', '644')
