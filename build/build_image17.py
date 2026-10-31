@@ -411,7 +411,7 @@ def add_oat_dirs(img):
         out = dbg(img, 'ls', '-p', d).stdout.decode('latin1').splitlines()
         for l in out:
             f = l.split('/')
-            if len(f) > 5 and f[5] not in ('.', '..') and f[2][:2] == '40' and not exists(img, f'{d}/{f[5]}/oat'): mkdir(f'{d}/{f[5]}/oat', '751')
+            if len(f) > 5 and f[5] not in ('.', '..') and f[2].lstrip('0')[:2] == '40' and not exists(img, f'{d}/{f[5]}/oat'): mkdir(f'{d}/{f[5]}/oat', '751')
     apply(img)
 
 print('writing the image (debugfs)'); apply(a.out)
