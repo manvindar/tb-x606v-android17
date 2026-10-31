@@ -12,12 +12,19 @@ on:
       tag:
         description: Release tag (used when publishing)
         default: v17-dp11-ci
+      gsi_url:
+        description: Google GSI zip (aosp_arm64) to patch; empty = the build set in this file
+        default: ''
+      gsi_zip_sha256:
+        description: SHA-256 of that zip as published by Google (required with gsi_url)
+        default: ''
   push:
     tags: ['a17-v*']
 
 env:
-  GSI_URL: https://dl.google.com/developers/android/cinnamonbun/images/gsi/aosp_arm64-exp-DP11.261002.005-16594701-a359a50b.zip
-  GSI_IMG_SHA256: e771161b08b7d62614bc067b17861587532ae94de79b85a0e9a0afa381b07b85          # system.img inside that zip
+  # DP11.261016.003 (October 29, 2026). The previous build, DP11.261002.005: aosp_arm64-exp-DP11.261002.005-16594701-a359a50b.zip, zip sha256 a359a50b..., pass it through the inputs
+  GSI_URL: ${{ inputs.gsi_url || 'https://dl.google.com/developers/android/cinnamonbun/images/gsi/aosp_arm64-exp-DP11.261016.003-16708287-d735a3b1.zip' }}
+  GSI_ZIP_SHA256: ${{ inputs.gsi_zip_sha256 || 'd735a3b11fe1b76a736f325f5500f7211167642fe2ed39dae0cf530d1cf51436' }}
   DONOR_URL: https://sourceforge.net/projects/misterztr-gsi/files/LineageOS/Android%2016/LineageOS-23.2-20260524-GAPPS-EXT4-GSI.7z/download
   DONOR_7Z_SHA256: 22b3c069445cc3d54819361a1636f7b27ff455dc547f300b868cecddb1b2e22d
   DONOR_IMG: LineageOS-23.2-20260524-GAPPS-EXT4-GSI.img
@@ -64,8 +71,9 @@ jobs:
       - name: Download Google's Android 17 GSI
         run: |
           curl -L --fail --retry 5 --retry-delay 10 -o gsi.zip "$GSI_URL"
+          echo "$GSI_ZIP_SHA256  gsi.zip" | sha256sum -c -
           unzip -o -q gsi.zip system.img && rm gsi.zip
-          echo "$GSI_IMG_SHA256  system.img" | sha256sum -c -
+          sha256sum system.img
 
       - name: Download the LineageOS 23.2 GSI (donor)
         run: |
