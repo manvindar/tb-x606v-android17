@@ -42,7 +42,9 @@ for arg in a.apk:
     tree = aapt2('dump', 'xmltree', '--file', 'AndroidManifest.xml', apk)
     names = [pkg] + re.findall(r'E: original-package[^\n]*\n\s+A: [^\n]*name\(0x[0-9a-f]+\)="([^"]+)"', tree)   # an app registers under its original-package name (Google Clock: com.android.deskclock)
     req = set(re.findall(r"uses-permission(?:-sdk-\d+)?: name='([^']+)'", out))
-    got = lambda n: allowed.get((None, n), set()) | (allowed.get((apart, n), set()) if apart else set().union(*[v for (pt, nn), v in allowed.items() if nn == n]))
+    # observed on the tablet: a system_ext priv-app is also granted by the system partition's lists (SystemUI's CUSTOMIZE_SYSTEM_UI), but not by product's (the launcher's 24 entries had to move to system_ext)
+    PARTS = {'system_ext': ('system_ext', 'system'), 'product': ('product', 'system'), 'vendor': ('vendor',), 'system': ('system',)}
+    got = lambda n: allowed.get((None, n), set()).union(*[allowed.get((pt, n), set()) for pt in PARTS.get(apart, ())]) if apart else set().union(*[v for (pt, nn), v in allowed.items() if nn == n])
     miss = sorted(p for p in req if p in priv and not all(p in got(n) for n in names))
     print(f'{pkg}: {len(req)} permissions requested, {len(miss)} privileged not allowed' + (': ' + ', '.join(miss) if miss else ''))
     if miss:

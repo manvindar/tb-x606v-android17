@@ -31,6 +31,7 @@ ap.add_argument('--gsi', required=True, help='raw ext4 system.img from the Googl
 ap.add_argument('--donor', '--a16', dest='donor', required=True, help='LineageOS 23.2 GSI, raw ext4')
 ap.add_argument('--out', required=True); ap.add_argument('--gapps', help='MindTheGapps-16.0.0-arm64 zip'); ap.add_argument('--out-gapps', help='write a second image with the Google apps (the --out image stays without)')
 ap.add_argument('--port-repo', default=os.path.join(HERE, '..', '..', 'tb-x606v-android16-port'), help='Android 16 port repo (ROM Tuner, boot animations)')
+ap.add_argument('--dev-tools', action='store_true', help='development safety net (tools/debug): boot_watchdog reboots into recovery when a boot does not finish, bootdiag writes the boot logcat to /data/local/tmp/bootdiag')
 ap.add_argument('--no-tuner', action='store_true'); ap.add_argument('--with-bootdiag', action='store_true', help='boot diagnostics service (logcat/kmsg into /data/local/tmp/bootdiag, costs performance)')
 ap.add_argument('--dolby', help='directory with DaxUI.apk, daxService.patched.apk (or daxService.apk) and com.dolby.daxservice.xml from the stock Lenovo firmware')
 ap.add_argument('--pixel', help='NikGapps-full-arm64-16-*.zip: source of the Pixel apps (Android 16 build; the launcher itself comes from --pixel-launcher-apk)')
@@ -313,6 +314,9 @@ if not a.no_tuner:
     gem = os.path.join(R, 'boot-animation', 'bootanimation-gemini.zip')
     put(os.path.join(R, 'boot-animation', 'bootanimation-arrow.zip'), media + '/bootanimation-arrow.zip', '644'); put(gem, media + '/bootanimation-gemini.zip', '644')
     put(gem, media + '/bootanimation.zip', '644')                    # Gemini is the default, the Tuner copies the chosen one over this file
+if a.dev_tools:
+    for f, mode in (('boot_watchdog.sh', '755'), ('bootdiag.sh', '755')): put(os.path.join(TOOLS, 'debug', f), '/system/bin/' + f, mode)
+    for f in ('zz_boot_watchdog.rc', 'zz_bootdiag.rc'): put(os.path.join(TOOLS, 'debug', f), '/system/etc/init/' + f, '644')
 if a.with_bootdiag:
     put(os.path.join(a.port_repo, 'debug', 'bootdiag.sh'), '/system/bin/bootdiag.sh', '755')
     put(tmpf('zz_bootdiag.rc', rc_fix(os.path.join(a.port_repo, 'debug', 'zz_bootdiag.rc'))), '/system/etc/init/zz_bootdiag.rc', '644')
