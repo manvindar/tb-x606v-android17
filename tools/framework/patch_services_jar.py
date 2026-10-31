@@ -13,14 +13,46 @@ src, dst = sys.argv[1:3]
 zin = zipfile.ZipFile(src); raw = bytearray(zin.read('classes.dex'))
 heads = [m.start() for m in re.finditer(rb'dex\n041\x00', raw)]
 # find the HintManagerService.<init>/getSupportInfo bytecode by its instruction pattern (so no hard-coded offsets)
-CTOR = bytes.fromhex('38071000' + '6e10092d0600' + '0c07' + '5b67ad2a')          # if-eqz v7,+0x10 ; invoke-virtual {v6} getSupportInfo ; move-result-object v7 ; iput-object v7,v6,mSupportInfo
-HANDLER = bytes.fromhex('0d06' + '1a00f1a0' + '7120' + '1e24' + '6000' + '1206' + '1106')   # move-exception v6 ; const-string v0,"Could not contact PowerHAL!" ; invoke-static ; const/4 v6,0 ; return-object v6
-c = raw.find(CTOR); assert c > 0 and raw.find(CTOR, c + 1) < 0, 'ctor pattern'
-h = raw.find(HANDLER); assert h > 0 and raw.find(HANDLER, h + 1) < 0, 'handler pattern'
+# The method/field/string/type indices change with every GSI build, so the patterns wildcard them (re.DOTALL, '..' = one 16-bit index) and the patches reuse the matched indices.
+def find1(pattern, what):
+    ms = list(re.finditer(pattern, raw, re.DOTALL))
+    assert len(ms) == 1, (what, len(ms))
+    return ms[0]
+# method names from the dex tables (offsets in a v041 container header are absolute), to tell look-alike call sites apart
+def _uleb(o):
+    v = sh = 0
+    while True:
+        x = raw[o]; o += 1; v |= (x & 0x7f) << sh; sh += 7
+        if not x & 0x80: return v, o
+def _str(base, i):
+    o = struct.unpack_from('<I', raw, struct.unpack_from('<I', raw, base + 0x3c)[0] + 4 * i)[0]; _, o = _uleb(o); return raw[o:raw.index(b'\0', o)].decode('latin1')
+def method_name(pos, idx):
+    base = max(x for x in heads if x <= pos)
+    c, _, n = struct.unpack_from('<HHI', raw, struct.unpack_from('<I', raw, base + 0x5c)[0] + 8 * idx)
+    ty = struct.unpack_from('<I', raw, struct.unpack_from('<I', raw, base + 0x44)[0] + 4 * c)[0]
+    return _str(base, ty) + '.' + _str(base, n)
+def find_call(pattern, what, idx_at, wanted):
+    ms = [m for m in re.finditer(pattern, raw, re.DOTALL) if method_name(m.start(), struct.unpack_from('<H', raw, m.start() + idx_at)[0]) == wanted]
+    assert len(ms) == 1, (what, len(ms))
+    return ms[0]
+def pat(*parts):
+    out = b''
+    for part in parts:
+        out += b'.{2}' if part is None else re.escape(bytes.fromhex(part))
+    return out
+# if-eqz v7,+0x10 ; invoke-virtual {v6} getSupportInfo ; move-result-object v7 ; iput-object v7,v6,mSupportInfo
+mc = find1(pat('38071000', '6e10', None, '0600', '0c07', '5b67', None), 'ctor pattern'); c = mc.start()
+# move-exception v6 ; const-string v0,"Could not contact PowerHAL!" ; invoke-static ; const/4 v6,0 ; return-object v6
+mh = find1(pat('0d06', '1a00', None, '7120', None, '6000', '1206', '1106'), 'handler pattern'); h = mh.start(); HANDLER = mh.group(0)
 base = max(x for x in heads if x <= h)
-# the try/catch item right after the insns of getSupportInfo: insns end after `return-object v6` of the handler (unit 0x61), then pad, tries
+# the try/catch item right after the insns of getSupportInfo (4-byte aligned: 2 bytes of padding when the unit count is odd)
+# the insns start is found through the code item's insns_size field, so a method that grew or shrank between GSI builds still works
+tot = None
+for k in range(20, 400):
+    if struct.unpack_from('<I', raw, h - 2 * k - 4)[0] == k + len(HANDLER) // 2: tot = k + len(HANDLER) // 2; ins0 = h - 2 * k; hunit = k; break
+assert tot, 'getSupportInfo code item'
 insn_end = h + len(HANDLER)
-tries = insn_end + 2   # 97 units is odd -> 2 bytes padding
+tries = insn_end + (2 if tot % 2 else 0)
 assert raw[tries:tries + 4] == b'\0\0\0\0' and raw[tries + 4:tries + 6] == b'\x11\x00', raw[tries:tries + 12].hex()
 lst = tries + 8; assert raw[lst] == 1 and raw[lst + 1] == 1, raw[lst:lst + 6].hex()
 tidx_off = lst + 2
@@ -49,21 +81,21 @@ raw[tidx_off:nxt] = enc
 # the verifier merges register types over the whole try range: v6 (`this`) must not be clobbered inside it, or the handler's jump to the
 # default-SupportInfo code sees v6 as Object ("'this' argument ... not instance of HintManagerService"). Rewrite units 0xb..0x11 to use v1/v0:
 #   iget-object v1,v6,mPowerHal ; invoke-interface {v1},IPower.getSupportInfo ; move-result-object v0 ; return-object v0
-t = h - 0x59 * 2 + 0xb * 2            # insns start + unit 0xb
-assert raw[t:t + 14] == bytes.fromhex('5466a62a' + '7210a6090600' + '0c06' + '1106')[:14], raw[t:t + 14].hex()
-raw[t:t + 14] = bytes.fromhex('5461a62a' + '7210a6090100' + '0c00' + '1100')
+t = ins0 + 0xb * 2            # insns start + unit 0xb
+# DP11.261002.005: ... 0c06 ; 1106 (return-object v6)    DP11.261016.003: ... 0c06 ; 28xx (goto the shared return-object v6)
+assert raw[t:t + 2] == bytes.fromhex('5466') and raw[t + 4:t + 6] == bytes.fromhex('7210') and raw[t + 8:t + 12] == bytes.fromhex('0600' + '0c06') and raw[t + 12:t + 14] in (bytes.fromhex('1106'), bytes.fromhex('2850')) or raw[t + 12] == 0x28, raw[t:t + 14].hex()
+raw[t:t + 14] = bytes.fromhex('5461') + raw[t + 2:t + 4] + bytes.fromhex('7210') + raw[t + 6:t + 8] + bytes.fromhex('0100' + '0c00' + '1100')
 raw[c:c + 4] = b'\0\0\0\0'                                  # 1. nop the null check on mPowerHal
-raw[h:h + 6] = bytes.fromhex('2900b9ff' + '0000')           # 2. goto/16 -0x47 (to the default-SupportInfo code at unit 0x12) ; nop (kills the orphaned const-string operand)
+assert raw[ins0 + 0x12 * 2:ins0 + 0x12 * 2 + 2] == bytes.fromhex('2200'), 'default SupportInfo code (new-instance) is not at unit 0x12'
+raw[h:h + 6] = bytes.fromhex('2900') + struct.pack('<h', 0x12 - hunit) + bytes.fromhex('0000')   # 2. goto/16 to the default-SupportInfo code at unit 0x12 ; nop (kills the orphaned const-string operand)
 # 3. BiometricCameraManagerImpl.subscribeToCameraEvents(): CameraManager.registerAvailabilityCallback throws on this device (the camera service cannot
 #    initialise its listener, Function not implemented) and BiometricService's handler thread takes system_server down. Make it a no-op.
-CAM = bytes.fromhex('5420e540' + '5422e440' + '1201' + '6e30d5132001' + '0e00')
-k = raw.find(CAM); assert k > 0 and raw.find(CAM, k + 1) < 0, 'camera pattern'
+k = find_call(pat('5420', None, '5422', None, '1201', '6e30', None, '2001', '0e00'), 'camera pattern', 12, 'Landroid/hardware/camera2/CameraManager;.registerAvailabilityCallback').start()
 raw[k:k + 4] = bytes.fromhex('0e000000')                      # return-void ; nop (keeps the rest of the method valid)
 # 4. ActivityTaskManagerService.LocalService.showSystemReadyErrorDialogsIfNeeded(): `Build.isBuildConsistent()` (Treble => VintfObject.verifyBuildAtBoot) is false
 #    for a GSI over this Android 10 vendor (sepolicy 29.0, VNDK 29, kernel 4.9), which shows "There's an internal problem with your device".
 #    Treat the build as consistent: const/4 v2,#1 ; nop x3 replaces `invoke-static {} isBuildConsistent ; move-result v2`.
-BC = bytes.fromhex('7100e90f0000' + '0a02')
-bk = raw.find(BC); assert bk > 0 and raw.find(BC, bk + 1) < 0, 'isBuildConsistent pattern'
+bk = find_call(pat('7100', None, '0000', '0a02'), 'isBuildConsistent pattern', 2, 'Landroid/os/Build;.isBuildConsistent').start()
 raw[bk:bk + 8] = bytes.fromhex('1212' + '000000000000')
 touched = {base, max(x for x in heads if x <= k), max(x for x in heads if x <= bk)}
 # fix headers: signature then checksum, of every dex that was edited (each dex's file_size is in its own header)
