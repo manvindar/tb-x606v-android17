@@ -13,3 +13,9 @@ The builder patches binaries and dex code of Google's GSI. Every patch has to fi
 
 DP11.261016.003 notes: the code is built with PAC and BTI (`paciasp`, `autiasp`, `bti c`: no-ops on this CPU and kernel), `HintManagerService.getSupportInfo` now calls `getInterfaceVersion()` on the power HAL first,
 and the tethering APEX binaries (`netbpfload`, `libnetd_updatable.so`, `libservice-connectivity.so`) were recompiled with the same logic at different addresses.
+
+## Debugging a boot that restarts (what worked on DP11.261016.003)
+- `init` can be wrapped to see why it dies early (`tools/debug/initwrap.c`: runs the real init under ptrace and replays its log lines, which the kernel otherwise rate-limits); `tools/debug/trcx.c` runs one command under ptrace and keeps the last syscalls.
+- The panic "Attempted to kill init" after about 30 s was init rebooting on purpose: the `bpfloader` service has `reboot_on_failure`. The tracer that wraps `netbpfload` writes its log to `/dev/bpftrace.log` (copied to /cache/bootdiag by the boot diagnostics service) because the loader's `/dev/kmsg` writes are rate-limited (310 lines became 14).
+- Cause there: the new netd.o counters use the BPF atomic fetch-add form, which kernel 4.9 rejects ("BPF_STX uses reserved fields"); `patch_netd_o.py` rewrites them to XADD.
+- Then `cpustatsd` aborted every 5 s because init cannot raise the ambient capabilities BPF (39) and PERFMON (38) on kernel 4.9; the builder strips them from its rc.
