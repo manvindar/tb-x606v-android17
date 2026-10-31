@@ -19,6 +19,8 @@ static void klog(const char *fmt, ...) {
   int n = vsnprintf(b, sizeof b - 8, fmt, ap); __builtin_va_end(ap);
   char o[420]; int m = snprintf(o, sizeof o, "<6>strace: %s\n", b); if (kfd >= 0) { if (write(kfd, o, m) < 0) {} }
 }
+// everything the loader writes to /dev/kmsg is also appended to a file: the kernel rate-limits a process's kmsg writes (310 lines became 14), which hides why it fails
+static void F(const char *f, ...) { int fd = open("/dev/bpftrace.log", O_WRONLY | O_CREAT | O_APPEND, 0666); if (fd < 0) return; char b[700]; va_list ap; va_start(ap, f); int n = vsnprintf(b, sizeof b - 1, f, ap); va_end(ap); b[n++] = '\n'; if (write(fd, b, n) < 0) {} close(fd); }
 static int peek(pid_t p, unsigned long addr, void *buf, size_t len) {
   struct iovec l = {buf, len}, r = {(void *)addr, len};
   return process_vm_readv(p, &l, 1, &r, 1, 0) == (ssize_t)len ? 0 : -1;
@@ -39,7 +41,7 @@ int main(int argc, char **argv) {
     pid_t w = waitpid(-1, &st, __WALL);
     if (w < 0) break;
     if (WIFEXITED(st) || WIFSIGNALED(st)) {
-      if (w == pid) { status = WIFEXITED(st) ? WEXITSTATUS(st) : 128 + WTERMSIG(st); klog("exit pid=%d status=%d (raw %#x)", w, status, st); break; }
+      if (w == pid) { status = WIFEXITED(st) ? WEXITSTATUS(st) : 128 + WTERMSIG(st); klog("exit pid=%d status=%d (raw %#x)", w, status, st); F("EXIT pid=%d status=%d", w, status); break; }
       continue;
     }
     if (!WIFSTOPPED(st)) continue;
@@ -51,6 +53,7 @@ int main(int argc, char **argv) {
     int idx = w & 0xffff;
     if (!pstate[idx]) { // syscall entry
       pstate[idx] = 1; pend[idx] = regs.regs[8];
+      if (regs.regs[8] == 64 && regs.regs[0] > 2) { char b[500]; rstr(w, regs.regs[1], b, regs.regs[2] < 490 ? regs.regs[2] + 1 : 490); for (char *q = b; *q; q++) if (*q == '\n') *q = ' '; F("%d WRITE: %s", (int)w, b); }
       if (regs.regs[8] == 280) {
         unsigned w32[16] = {0}; peek(w, regs.regs[1], w32, sizeof w32 < regs.regs[2] ? sizeof w32 : regs.regs[2]);
         if (regs.regs[0] == 0) klog("bpf(MAP_CREATE) type=%u ks=%u vs=%u max=%u flags=%#x inner=%u numa=%u name=%.16s ifindex=%u btf_fd=%d key_id=%u val_id=%u", w32[0], w32[1], w32[2], w32[3], w32[4], w32[5], w32[6], (char *)&w32[7], w32[11], (int)w32[12], w32[13], w32[14]);
@@ -64,8 +67,8 @@ int main(int argc, char **argv) {
     } else {
       pstate[idx] = 0; long ret = (long)regs.regs[0];
       unsigned long nr = pend[idx];
-      if (nr == 280) klog("  -> bpf ret=%ld", ret);
-      else if (ret < 0 && ret > -4096 && n < 400 && nr != 56 /*openat*/ ) { klog("syscall %lu ret=%ld", nr, ret); n++; }
+      if (nr == 280) { klog("  -> bpf ret=%ld", ret); if (ret < 0) F("  -> bpf ret=%ld", ret); }
+      else if (ret < 0 && ret > -4096 && n < 400 && nr != 56 /*openat*/ ) { klog("syscall %lu ret=%ld", nr, ret); n++; F("syscall %lu ret=%ld", nr, ret); }
       else if (ret < 0 && ret > -4096 && n < 400 && nr == 56) { klog("openat ret=%ld", ret); n++; }
       else if (nr == 221 /*execve*/) {}
     }

@@ -34,10 +34,13 @@ def has(c, kind, key, seen=None):
     return False
 OBJ = {'toString', 'hashCode', 'equals', 'getClass', 'name', 'ordinal', 'wait', 'notify', 'notifyAll', 'clone', 'finalize', 'compareTo', 'getDeclaringClass', 'describeConstable'}
 miss = collections.OrderedDict()
+REF = re.compile(r'(L[^;\s]+;)\.([^:\s]+):(\S+) // (field|method)@')      # no backtracking over the register list: a 500 MB dump takes about a minute
+count = collections.Counter()
 for l in open(app, errors='replace'):
-    m = re.search(r'\{?[^}]*\}?,? (L[^;]+;)\.([^:]+):(\S+) // (field|method)@', l)
-    if not m: continue
-    c, n, t, kind = m.groups()
+    if '// field@' in l or '// method@' in l:
+        m = REF.search(l)
+        if m: count[m.groups()] += 1
+for (c, n, t, kind), k in count.items():
     r = has(c, 'f' if kind == 'field' else 'm', (n, t))
-    if r is False and n not in OBJ: miss[(kind, c, n, t)] = miss.get((kind, c, n, t), 0) + 1
+    if r is False and n not in OBJ: miss[(kind, c, n, t)] = k
 for (kind, c, n, t), k in miss.items(): print(f'{kind}\t{c[1:-1].replace("/", ".")}.{n}:{t}\tx{k}')
