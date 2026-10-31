@@ -5,3 +5,4 @@
 *.capex
 logs/
 tools/lights/out/
+__pycache__/
