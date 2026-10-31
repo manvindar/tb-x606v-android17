@@ -367,8 +367,8 @@ if a.pixel_tablet:
     ensure_dirs('/system/' + f for f in new)
     for f in new: put(os.path.join(st, f), '/system/' + f, '644', 0, 0, SYS)
     # the allowlist is read from the partition of the app: the launcher lives in system_ext, so its entries go to /system/system_ext/etc/permissions
-    put(os.path.join(TOOLS, 'pixel', 'privapp-permissions-nexuslauncher-pixeltablet-a17.xml'), '/system/system_ext/etc/permissions/privapp-permissions-nexuslauncher-pixeltablet-a17.xml', '644')
-    allow_xmls.append(os.path.join(TOOLS, 'pixel', 'privapp-permissions-nexuslauncher-pixeltablet-a17.xml') + ':system_ext')
+    put(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml'), '/system/system_ext/etc/permissions/privapp-permissions-pixeltablet-a17.xml', '644')
+    allow_xmls.append(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml') + ':system_ext')
     priv_apks += [os.path.join(st, f) + ':system_ext' for f in staged if f.startswith('system_ext/priv-app/') and f.endswith('.apk')]
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
     put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')

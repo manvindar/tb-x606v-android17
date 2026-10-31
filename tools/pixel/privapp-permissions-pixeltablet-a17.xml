@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Privileged permissions the Pixel Tablet launcher of Android 17 DP11.261016.003 requests. Without an entry for each one system_server aborts at boot (ro.control_privapp_permissions=enforce in the vendor). -->
+<!-- Privileged permissions that the Pixel Tablet SystemUI, Settings and launcher of Android 17 DP11.261016.003 request beyond the GSI's own allowlists. Without an entry for each one system_server aborts at boot (ro.control_privapp_permissions=enforce in the vendor). -->
 <permissions>
     <privapp-permissions package="com.google.android.apps.nexuslauncher">
         <permission name="android.permission.ACCESS_CONTEXTUAL_SEARCH"/>
@@ -26,5 +26,13 @@
         <permission name="android.permission.STOP_APP_SWITCHES"/>
         <permission name="android.permission.USE_ON_DEVICE_INTELLIGENCE"/>
         <permission name="android.permission.WRITE_SECURE_SETTINGS"/>
+    </privapp-permissions>
+    <privapp-permissions package="com.android.systemui">
+        <permission name="android.permission.ACCESS_CONTEXT_HUB"/>
+        <permission name="android.permission.REGISTER_STATS_PULL_ATOM"/>
+        <permission name="android.permission.SET_WALLPAPER_COMPONENT"/>
+    </privapp-permissions>
+    <privapp-permissions package="com.android.settings">
+        <permission name="android.permission.CONTROL_DEVICE_LIGHTS"/>
     </privapp-permissions>
 </permissions>
