@@ -14,8 +14,14 @@ while [ $i -lt 60 ]; do
   i=$((i + 1)); sleep 5
 done
 [ $i -ge 60 ] && exit 1
-pm list packages 2>/dev/null | grep -q package:com.google.android.contacts && pm disable-user --user 0 com.android.contacts >/dev/null 2>&1
-pm list packages 2>/dev/null | grep -q package:com.google.android.apps.nbu.files && pm disable --user 0 com.android.documentsui/com.android.documentsui.LauncherActivity >/dev/null 2>&1
+has() { pm list packages 2>/dev/null | grep -q "package:$1\$"; }
+# AOSP apps that the Pixel layer replaces: hide them once their Google replacement is installed (disable-user keeps the packages, nothing else depends on the launcher icons)
+has com.google.android.contacts && pm disable-user --user 0 com.android.contacts >/dev/null 2>&1
+has com.google.android.calendar && pm disable-user --user 0 com.android.calendar >/dev/null 2>&1
+has com.google.android.deskclock && pm disable-user --user 0 com.android.deskclock >/dev/null 2>&1
+has com.google.android.apps.photos && pm disable-user --user 0 com.android.gallery3d >/dev/null 2>&1
+has com.google.android.apps.messaging && pm disable-user --user 0 com.android.messaging >/dev/null 2>&1
+has com.google.android.apps.nbu.files && pm disable --user 0 com.android.documentsui/com.android.documentsui.LauncherActivity >/dev/null 2>&1
 # The Pixel Launcher puts a search bar on the home screen. Without the Google app it picks AOSP's old QuickSearchBox widget (serif "Google" logo in a flat frame); with that package disabled
 # it draws its own rounded Pixel search pill instead.
 pm disable-user --user 0 com.android.quicksearchbox >/dev/null 2>&1

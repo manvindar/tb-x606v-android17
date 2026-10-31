@@ -361,7 +361,7 @@ if a.pixel:
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
     put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
 if a.pixel_tablet:
-    print('9c Pixel Tablet SystemUI, Settings, launcher')
+    print('9c Pixel Tablet layer')
     st = a.pixel_tablet
     for dst, src in (('/system/system_ext/priv-app/SystemUI/SystemUI.apk', 'system_ext/priv-app/SystemUI/SystemUI.apk'),
                      ('/system/system_ext/priv-app/Settings/Settings.apk', 'system_ext/priv-app/Settings/Settings.apk')):
@@ -370,10 +370,14 @@ if a.pixel_tablet:
     new = [f for f in staged if f not in ('system_ext/priv-app/SystemUI/SystemUI.apk', 'system_ext/priv-app/Settings/Settings.apk')]
     ensure_dirs('/system/' + f for f in new)
     for f in new: put(os.path.join(st, f), '/system/' + f, '644', 0, 0, SYS)
-    # the allowlist is read from the partition of the app: the launcher lives in system_ext, so its entries go to /system/system_ext/etc/permissions
+    # the allowlist is read from the partition of the app: the launcher, SystemUI and Settings live in system_ext, so their extra entries go to /system/system_ext/etc/permissions
     put(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml'), '/system/system_ext/etc/permissions/privapp-permissions-pixeltablet-a17.xml', '644')
     allow_xmls.append(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml') + ':system_ext')
-    priv_apks += [os.path.join(st, f) + ':system_ext' for f in staged if f.startswith('system_ext/priv-app/') and f.endswith('.apk')]
+    allow_xmls += [os.path.join(st, f) + ':product' for f in staged if f.startswith('product/etc/permissions/') and f.endswith('.xml')]
+    priv_apks += [os.path.join(st, f) + (':system_ext' if f.startswith('system_ext/') else ':product') for f in staged if '/priv-app/' in f and f.endswith('.apk')]
+    # Pixel boot animation: the default slot of ROM Tuner ("gemini") and the plain file
+    for pz, dsts in (('product/media/bootanimation-pixel.zip', ('bootanimation.zip', 'bootanimation-gemini.zip')), ('product/media/bootanimation-pixel-dark.zip', ('bootanimation-dark.zip',))):
+        for d in dsts: put(os.path.join(st, pz), '/system/product/media/' + d, '644')
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
     put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
 if priv_apks:
