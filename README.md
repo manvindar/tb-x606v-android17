@@ -1,10 +1,12 @@
 # Android 17 on the Lenovo TB-X606V
 
-Google's Android 17 GSI (`aosp_arm64`, build DP11.261002.005) running on the Lenovo Tab M10 FHD Plus (TB-X606V, MT8768), with the stock
+Google's Android 17 GSI (`aosp_arm64`; this branch builds DP11.261016.003, `main` builds the tested DP11.261002.005) running on the Lenovo Tab M10 FHD Plus (TB-X606V, MT8768), with the stock
 Android 10 vendor image and the stock 4.9.190 kernel. It boots to a working UI. Wi-Fi, Bluetooth, audio, camera, brightness and the keyboard work, and
 Settings opens in under a second once the apps are compiled. Cellular, USB mode switching and DRM playback do not work (see "Known issues").
 
 This repository holds the patches, helper tools and notes, and `build/build_image17.py` rebuilds the whole system image from public inputs (see "Build the image yourself").
+
+A Pixel Tablet look (Pixel SystemUI, Settings, launcher and apps) is a separate layer on branch `exp/pixel-tablet`. It uses Google's Pixel Tablet factory image as input, so no Pixel binaries are published: you build that layer yourself (see `docs/PIXEL.md` there).
 
 Companion repositories:
 - [`tb-x606v-kernel`](https://github.com/manvindar/tb-x606v-kernel): the 4.9 kernel patches and CI build. The final setup does not use it (see below).
@@ -207,6 +209,7 @@ Each item came from a real failure. `docs/ANALYSIS.md` has the evidence and the 
   `Build.isBuildConsistent()` dialog that the old vendor can never satisfy.
 - **APEXes** that had to be edited are re-signed with a local AVB key and APK-signed (`tools/apex`).
 - **Timeouts.** `ro.hw_timeout_multiplier=5` stops the activity manager and SystemUI from timing out on this CPU.
+- **Compiled app code.** The system image is full (a few MB free) and ART writes the compiled code of a system app next to its APK, in `<app dir>/oat/arm64`. Compiling SystemUI or Settings therefore failed with "No space left on device" and they ran interpreted. The builder puts an empty `oat` directory in every app directory and `tools/firstboot/odex_bind.sh` (started in `post-fs-data`, before the package scan) bind mounts `/data/odex/<app>` over each one, so the compiled code lives in `/data`. The first boot job compiles the shade, launcher and Settings first (60 s after boot) and restarts SystemUI. With the Pixel Launcher this took janky frames in the app drawer from 22 to 30 percent down to 0 to 2 percent. The notification shade is not helped: it is bound by the GPU and costs about 115 ms per frame either way.
 - **Vendor.** `/dev/ion` permissions, seccomp policies, ueventd (`tools/vendor`) and the fstab flags Android 17 rejects (`tools/fix_vendor_a17.py`).
 - **Audio.** The vendor audio HAL is HIDL 5.0, which Android 17 no longer supports, and a 5.0 client from Android 16 does not fit A17's vtables (the 6.0 client has a different wire format: the offload info struct grew and methods were inserted). So `audioserver` and its roughly 164 libraries come from Android 16 and run from `/system/lib64/a16audio` through `LD_LIBRARY_PATH`. A17's clients differ in a few AIDL transaction numbers, so `tools/audio/fix_aidl_codes.py` rewrites them in the two A17 AIDL libs.
 - **Low memory killer.** The Android 17 `lmkd` needs PSI or memcg, which 4.9 does not have. The idle stub that replaced it never listened on its socket, and the
