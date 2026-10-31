@@ -23,7 +23,7 @@ Everything is done offline with debugfs (no mount, runs on macOS and Linux). Ste
                 Wallpaper & style, sounds, Google Contacts, Calculator, Files, Calendar, Clock, plus a one-shot that makes the Pixel Launcher the home app.
                 The staged priv-apps are checked against the allowlists first: a missing entry would hang the tablet on the boot animation.
 Compiled app code (oat/odex) cannot be produced offline: see tools/scripts/dexopt_on_tablet.sh. The vendor partition needs tools/scripts/apply_vendor_a17.sh."""
-import argparse, contextlib, glob, hashlib, io, json, os, re, shutil, subprocess, sys, tempfile, zipfile
+import argparse, contextlib, glob, hashlib, io, json, os, re, shutil, struct, subprocess, sys, tempfile, zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__)); TOOLS = os.path.join(HERE, '..', 'tools')
 ap = argparse.ArgumentParser()
@@ -54,7 +54,6 @@ def bt_dir():
     sys.exit('Android SDK build-tools not found (zipalign, apksigner): set ANDROID_HOME or --build-tools')
 BT = bt_dir()
 PART = 0xf3800000
-INIT_SHA = 'bb702f17e6660ef8f2a1fd9158c2de876fa0c8f9679a7a49f4a2d02e1119451f'   # DP11.261002.005 /system/bin/init
 SYS = 'u:object_r:system_file:s0'; LIB = 'u:object_r:system_lib_file:s0'
 W = a.workdir or tempfile.mkdtemp(prefix='a17build'); os.makedirs(W, exist_ok=True)
 
@@ -135,11 +134,16 @@ APEX_ENV = dict(os.environ, E2FS=E2, ZIPALIGN=os.path.join(BT, 'zipalign'), APKS
 
 # 2 init, build.prop ---------------------------------------------------------------------------------------------------
 print('2 init, build.prop')
-init = cat(S, '/system/bin/init'); assert hashlib.sha256(init).hexdigest() == INIT_SHA, 'unexpected init build: the patch offsets would be wrong'
+init = cat(S, '/system/bin/init')
 d = bytearray(init)
-assert d[0x103d0c:0x103d14].hex() == '00010054' + '20008052'          # b.eq skip ; mov w0,#1
-d[0x103d0c:0x103d10] = bytes.fromhex('01010054')                      # b.ne skip
-d[0x103d10:0x103d14] = bytes.fromhex('00008052')                      # mov w0,#0   -> setenforce(0) when the kernel is enforcing
+# the SELinux enforce decision: bl is_enforcing-ish ; cmp w0,#1 ; b.eq skip ; mov w0,#1 ; bl setenforce ; cbz w0,... (found by pattern, the offset moves with every GSI build)
+hits = [a for a in range(0, len(d) - 16, 4)
+        if struct.unpack_from('<I', d, a)[0] == 0x7100041f and (struct.unpack_from('<I', d, a + 4)[0] & 0xff00001f) == 0x54000000
+        and struct.unpack_from('<I', d, a + 8)[0] == 0x52800020 and struct.unpack_from('<I', d, a + 12)[0] >> 26 == 0x25]
+assert len(hits) == 1, ('init: enforce check not found or ambiguous', hits)
+o = hits[0] + 4
+struct.pack_into('<I', d, o, struct.unpack_from('<I', d, o)[0] | 1)      # b.eq skip -> b.ne skip
+struct.pack_into('<I', d, o + 4, 0x52800000)                             # mov w0,#0   -> setenforce(0) when the kernel is enforcing
 put(tmpf('init.orig', init), '/system/bin/init.enforcing', '755')
 replace(S, '/system/bin/init', tmpf('init.p', bytes(d)))
 
