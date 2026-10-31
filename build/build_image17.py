@@ -378,7 +378,7 @@ if priv_apks:
     for apk in ('/system/framework/framework-res.apk', '/system/system_ext/priv-app/SystemUI/SystemUI.apk'): open(wp(os.path.basename(apk)), 'wb').write(cat(S, apk))
     for d in ('/system/etc/permissions', '/system/product/etc/permissions', '/system/system_ext/etc/permissions'):
         for n in ls_names(d):
-            if n.startswith('privapp-permissions') and n.endswith('.xml'): allow_xmls.append(tmpf('allow_' + n, cat(S, d + '/' + n)) + ':' + ('product' if '/product/' in d else 'system_ext' if '/system_ext/' in d else 'system'))
+            if n.endswith('.xml'): allow_xmls.append(tmpf('allow_' + n, cat(S, d + '/' + n)) + ':' + ('product' if '/product/' in d else 'system_ext' if '/system_ext/' in d else 'system'))
     r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'pixel', 'check_privapp_offline.py'), '--perm-apk', wp('framework-res.apk'), '--perm-apk', wp('SystemUI.apk')]
                        + [x for f in allow_xmls for x in ('--allow', f)] + [x for f in priv_apks for x in ('--apk', f)], capture_output=True, text=True, env=dict(os.environ, BUILD_TOOLS=BT))
     print(r.stdout.rstrip())
