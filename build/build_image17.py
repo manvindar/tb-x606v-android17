@@ -405,9 +405,6 @@ if priv_apks:
         print('  --dev-tools: the missing entries were allowlisted from the generated file (privapp-extra-allow.xml next to the image)')
     elif r.returncode: sys.exit('priv-app permissions are not allowlisted (see above): add them to an allowlist xml (check_privapp_offline.py --write-extra), or the tablet will not boot')
 
-print('writing the image (debugfs)'); apply(a.out)
-add_oat_dirs(a.out)
-
 def add_oat_dirs(img):
     """odex_bind.sh bind mounts /data/odex/<app> over <app dir>/oat. / is read-only when it runs (post-fs-data), so the mount points have to be in the image."""
     for d in ('/system/system_ext/priv-app', '/system/system_ext/app', '/system/product/priv-app', '/system/product/app', '/system/priv-app', '/system/app'):
@@ -416,6 +413,9 @@ def add_oat_dirs(img):
             f = l.split('/')
             if len(f) > 5 and f[5] not in ('.', '..') and f[2][:2] == '40' and not exists(img, f'{d}/{f[5]}/oat'): mkdir(f'{d}/{f[5]}/oat', '751')
     apply(img)
+
+print('writing the image (debugfs)'); apply(a.out)
+add_oat_dirs(a.out)
 
 # 10 Google apps ----------------------------------------------------------------------------------------------------------------
 def add_gapps(img):
