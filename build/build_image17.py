@@ -34,6 +34,7 @@ ap.add_argument('--port-repo', default=os.path.join(HERE, '..', '..', 'tb-x606v-
 ap.add_argument('--no-tuner', action='store_true'); ap.add_argument('--with-bootdiag', action='store_true', help='boot diagnostics service (logcat/kmsg into /data/local/tmp/bootdiag, costs performance)')
 ap.add_argument('--dolby', help='directory with DaxUI.apk, daxService.patched.apk (or daxService.apk) and com.dolby.daxservice.xml from the stock Lenovo firmware')
 ap.add_argument('--pixel', help='NikGapps-full-arm64-16-*.zip: source of the Pixel apps (Android 16 build; the launcher itself comes from --pixel-launcher-apk)')
+ap.add_argument('--pixel-tablet', help='directory made by tools/pixel/stage_pixel_tablet.py: Pixel Tablet SystemUI, Settings and launcher + config overlays of the matching Android 17 build (replaces the GSI SystemUI and Settings)')
 ap.add_argument('--pixel-launcher-apk', help='Pixel Launcher built by tools/pixel/build_pixel_launcher.sh')
 ap.add_argument('--e2fs', help='directory with debugfs, e2fsck, resize2fs, mke2fs (default: found on PATH, /sbin, Homebrew)')
 ap.add_argument('--build-tools', help='Android SDK build-tools directory (zipalign, apksigner, d8); default $ANDROID_HOME/build-tools/<newest>')
@@ -348,6 +349,20 @@ if a.pixel:
     for f in staged: put(os.path.join(px, f), '/system/product/' + f, '644', 0, 0, LIB if f.startswith(('lib/', 'lib64/')) else SYS)
     priv_apks += [os.path.join(px, f) for f in staged if f.startswith('priv-app/') and f.endswith('.apk')]
     allow_xmls += [os.path.join(px, f) for f in staged if f.startswith('etc/permissions/') and f.endswith('.xml')]
+    put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
+    put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
+if a.pixel_tablet:
+    print('9c Pixel Tablet SystemUI, Settings, launcher')
+    st = a.pixel_tablet
+    for dst, src in (('/system/system_ext/priv-app/SystemUI/SystemUI.apk', 'system_ext/priv-app/SystemUI/SystemUI.apk'),
+                     ('/system/system_ext/priv-app/Settings/Settings.apk', 'system_ext/priv-app/Settings/Settings.apk')):
+        replace(S, dst, os.path.join(st, src))            # same package, owner and label as the GSI's own apps
+    staged = sorted(os.path.relpath(os.path.join(r, f), st) for r, _, fs in os.walk(st) for f in fs)
+    new = [f for f in staged if f not in ('system_ext/priv-app/SystemUI/SystemUI.apk', 'system_ext/priv-app/Settings/Settings.apk')]
+    ensure_dirs('/system/' + f for f in new)
+    for f in new: put(os.path.join(st, f), '/system/' + f, '644', 0, 0, SYS)
+    for x in ('privapp-permissions-nexuslauncher-a17.xml',): put(os.path.join(TOOLS, 'pixel', x), '/system/product/etc/permissions/' + x, '644')
+    priv_apks += [os.path.join(st, f) for f in staged if f.startswith('system_ext/priv-app/') and f.endswith('.apk')]
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
     put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
 if priv_apks:
