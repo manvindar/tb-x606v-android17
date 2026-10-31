@@ -358,6 +358,8 @@ if a.pixel:
     for f in staged: put(os.path.join(px, f), '/system/product/' + f, '644', 0, 0, LIB if f.startswith(('lib/', 'lib64/')) else SYS)
     priv_apks += [os.path.join(px, f) + ':product' for f in staged if f.startswith('priv-app/') and f.endswith('.apk')]
     allow_xmls += [os.path.join(px, f) + ':product' for f in staged if f.startswith('etc/permissions/') and f.endswith('.xml')]
+    # AOSP Provision is a second SETUP_WIZARD activity: with two, PackageManager names no setup wizard package and the Google wizard never gets the `setup` permissions (NETWORK_SETUP_WIZARD: wifi page crashes)
+    cmds.append('rm /system/system_ext/priv-app/Provision/Provision.apk')
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
     put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
 if a.pixel_tablet:
@@ -378,6 +380,8 @@ if a.pixel_tablet:
     # Pixel boot animation: the default slot of ROM Tuner ("gemini") and the plain file
     for pz, dsts in (('product/media/bootanimation-pixel.zip', ('bootanimation.zip', 'bootanimation-gemini.zip')), ('product/media/bootanimation-pixel-dark.zip', ('bootanimation-dark.zip',))):
         for d in dsts: put(os.path.join(st, pz), '/system/product/media/' + d, '644')
+    # AOSP Provision is a second SETUP_WIZARD activity: with two, PackageManager names no setup wizard package and the Google wizard never gets the `setup` permissions (NETWORK_SETUP_WIZARD: wifi page crashes)
+    cmds.append('rm /system/system_ext/priv-app/Provision/Provision.apk')
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
     put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
 if priv_apks:
