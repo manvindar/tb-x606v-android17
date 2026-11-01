@@ -189,3 +189,59 @@ Not verified: that `servicemanager` accepts the unmarked binder for this name an
 retries the lookup after system_server started without the service (the old `libvibratorservice` cached a failed lookup for the life of the process, the new provider code is not available here); how the motor feels with
 25 to 50 ms pulses; whether an SELinux denial shows up with enforcing policy (the build is permissive); whether `servicemanager` re-reads `/vendor/etc/vintf/manifest` without a reboot (it is expected to cache it, so
 plan on a reboot after the fragment is first installed).
+
+## Battery (2026-11-01)
+
+Status: the shim is written, builds and passes a host test. It has not been run on the tablet.
+
+Symptom: `dumpsys battery` showed level 100, scale 100, voltage 0, temperature -99, status 5 (full) and "Capacity level: -1" at every moment, so the battery was always 100 percent and CPU-Z showed voltage,
+temperature and health as unknown. Two separate causes, found by reading `/sys/class/power_supply`, the vendor `dmesg` and the Android 17 `services.jar`:
+
+1. **The voltage and temperature are wrong at the vendor HAL.** Android 17 `HealthServiceWrapper.create` tries the AIDL `android.hardware.health.IHealth/default` first (`waitForDeclaredService`) and falls back to HIDL
+   `android.hardware.health@2.0::IHealth/default` on `NoSuchElementException`. Nothing declares the AIDL instance here, so the fallback runs and talks to the vendor `health@2.0-service`. That service logs
+   `healthd: battery l=100 v=0 t=-9.9 h=2 st=5 c=0 fc=2851000 cc=896 chg=u` every few seconds. The kernel registers two supplies of type `Battery`: the real `battery` and `mm8013`, the driver of an external gauge chip
+   (`drivers/power/supply/mediatek/battery/mm8013.c`, `CONFIG_GAGUE_MM8013=y`) that is not fitted on this board, so every property answers -99 (`voltage_now`, `temp`, `current_now`, `batt_cap`). healthd's BatteryMonitor
+   takes the first `Battery` supply it finds for each file, and for voltage and temperature that is `mm8013`: -99 / 1000 = 0 mV and -99 tenths = -9.9 C. (The `hal_health_default` denials for `mm8013/voltage_now` in logcat are the same read; the build is
+   permissive, so they are only noise.) The values `battery/status` and `battery/capacity` do come from the real supply.
+2. **The real supply is itself stale.** `battery/capacity` is 100 and `battery/status` is Full, but the same supply says `charge_counter` 1767620 uAh when first read, then 1824640 and 1910170 uAh over the next half hour, `current_now` about +1.0 A and `voltage_now`
+   4.03 V rising to 4.15 V. Those counters are exactly 62, 64 and 67 times 28510 (see below). The fuel gauge daemon (`fuelgauged`, kernel log `MTK_FG ... ui_soc:6656`, units of 0.01 percent) agrees: 66.56 percent and rising.
+   The tablet is charging at about 1 A and is not full.
+
+Which number is true: the gauge. In the X606F kernel source (`drivers/power/supply/mediatek/battery/mtk_battery.c`, `battery_get_property`) `charge_counter = ui_soc * q_max * 1000 / 100` and `charge_full = q_max * 1000`, with `q_max`
+a constant from the battery table (2851 mAh here). So `charge_counter / charge_full` is the gauge's own UI state of charge by construction, and it matches the `ui_soc` in the kernel log (the measured values were 62, 64 and 67). `capacity` is a separate stored
+value (`battery_main.BAT_CAPACITY`; `evb_battery_init` sets 100, and in the X606F source the gauge daemon's UISOC command overwrites it together with `ui_soc`; on this X606V kernel it clearly does not). `status` is stuck the same way: in the source Full is also an
+initial value (`evb_battery_init`) that only `battery_callback` (CHARGER_NOTIFY_START_CHARGING and others) changes, and no `battery_callback` line is in dmesg. This X606V kernel is not the published X606F source, so the exact reason `capacity` stays 100 is not confirmed;
+the disagreement is measured. Not true either: `charge_full`. `q_max` 2851 mAh is a table constant; the gauge's own `Q:[49577 ...]` (units of 0.1 mAh) is 4957.7 mAh and `batt_id` says `1,5000ma`, a 5000 mAh cell. So absolute mAh values (`charge_counter`, `charge_full`)
+are about 43 percent too low, while their ratio is right. The shim passes them on unchanged and takes the design capacity (5000000 uAh) from `batt_id`.
+
+What `tools/health` does: a Java service in `app_process`, same method as `tools/vibrator`. It registers `android.hardware.health.IHealth/default`, declared in `/vendor/etc/vintf/manifest/android.hardware.health-aidl.xml` as version 3
+(`vintf_health_aidl.xml`, installed by `apply_vendor_a17.sh` and the TWRP zip), and reads `/sys/class/power_supply` every 10 seconds. The vendor `health-hal-2-0` keeps running for its other clients; the framework simply prefers the AIDL instance.
+- Supply choice: the `Battery` supply that has a `capacity` node (`battery`); `mm8013` has none. Chargers by their `type` as in BatteryMonitor: `USB` is USB, `Mains` is AC, `Unknown` (`charger`, `customer` here) is ignored, as healthd does (the vendor log says `chg=u`, USB only).
+- Fields: voltage `voltage_now / 1000`, temperature `temp` (tenths C), current `current_now` unchanged (the MediaTek driver reports it positive while charging and negative while discharging, `mtk_battery.c`: `if (!b_ischarging) fgcurrent = 0 - fgcurrent`, which is also the Android sign),
+  `current_avg`, `cycle_count`, `charge_full`, `charge_counter`, technology, health, present. Maximum charging current and voltage are `usb/current_max` and `voltage_max` of an online charger (500000 and 5000000 on this tablet; they look like constants), 500000 and 5000000 if an online charger has none, 0 and 0 unplugged.
+  Capacity level is "unsupported", charge time to full -1, charging state and policy 0, no storage, disk or hinge data.
+- **Level correction** (`HealthCore.correctLevel`, on by default): if `charge_counter / charge_full` and `capacity` differ by more than 10 points the ratio is used as the level, and a Full status that goes with the stale level is reported as Charging (a charger is online) or Discharging.
+  When both files are missing, or the two agree, `capacity` and `status` are reported as the kernel gives them. The condition "capacity is 100 and status is not Full" is not a separate test: it is covered by the ratio test whenever the counter files exist.
+  Two knobs in `HealthCore`: `correctLevel` and `maxDisagreement`. Expected effect on the tablet as it is now: level 67 instead of 100, status Charging instead of Full.
+  Risk: if `capacity` is the right one and `charge_counter` the wrong one on some other occasion (for instance while the gauge recalibrates) the shim follows the counter.
+
+Framework facts (from `services.jar` of this build, `dexdump -d`): `HealthServiceWrapperAidl` calls `ServiceManager.waitForDeclaredService("android.hardware.health.IHealth/default")`, which is `isDeclared(name) ? waitForService(name) : null`, and `waitForService` blocks in libbinder until the service is registered. Then it calls
+`registerCallback(IHealthInfoCallback)` followed by `update()`, and registers a service notification for restarts. Afterwards the framework only receives `IHealthInfoCallback.healthInfoChanged(HealthInfo)` (oneway) and calls `getHealthInfo`, `getChargeCounterUah`, `getCurrentNowMicroamps`, `getCurrentAverageMicroamps`, `getCapacity`,
+`getEnergyCounterNwh`, `getChargeStatus`, `getChargingPolicy`, `getBatteryHealthData` and `getHingeInfo` for `BatteryManager` properties and dumps; it catches `UnsupportedOperationException` and `ServiceSpecificException` on all of them. It never asks for IStorage or ISystem.
+The services.jar is built against interface version 5 (`HealthInfoCallback.getInterfaceVersion()` returns 5, hash `33ada68...`); the A17 compatibility matrices say `3` (202404), `3-4` (202504) and `3-5` (202604), so version 3 is accepted by all of them and is what the shim declares and returns from `getInterfaceVersion`.
+Transaction codes (the constants in `IHealth$Stub$Proxy`): 1 registerCallback, 2 unregisterCallback, 3 update, 4 getChargeCounterUah, 5 getCurrentNowMicroamps, 6 getCurrentAverageMicroamps, 7 getCapacity, 8 getEnergyCounterNwh, 9 getChargeStatus, 12 getHealthInfo,
+14 getChargingPolicy, 15 getBatteryHealthData, 16 getHingeInfo (10, 11 and 13 are getStorageInfo, getDiskStats and setChargingPolicy; R8 removed them from the framework copy, the numbering follows from the gaps). `HealthInfo.readFromParcel` reads a size int and then
+27 fields in this order: chargerAcOnline, chargerUsbOnline, chargerWirelessOnline, chargerDockOnline (booleans), maxChargingCurrentMicroamps, maxChargingVoltageMicrovolts, batteryStatus, batteryHealth (ints), batteryPresent (boolean), batteryLevel, batteryVoltageMillivolts,
+batteryTemperatureTenthsCelsius, batteryCurrentMicroamps, batteryCycleCount, batteryFullChargeUah, batteryChargeCounterUah (ints), batteryTechnology (string), batteryCurrentAverageMicroamps (int), diskStats and storageInfos (typed arrays), batteryCapacityLevel (int),
+batteryChargeTimeToFullNowSeconds (long), batteryFullChargeDesignCapacityUah, chargingState, chargingPolicy (ints), batteryHealthData (typed object), hingeInfos (typed array). Fields past the size are skipped, a size below 4 is rejected. The enums are int backed.
+`tools/health/test/CoreTest.java` checks the type string of this list (`ZZZZIIIIZIIIIIIISIAAIJIIIOA`) and `HealthShim.writeHealthInfo` writes exactly that list.
+Unsupported methods (8, 10, 11, 13 to 16 and any newer code) answer `EX_UNSUPPORTED_OPERATION`; `getBatteryHealthData` must not return null because the wrapper reads fields from the result without a null check (that would be a NullPointerException in system_server for a `BatteryManager` query).
+`INTERFACE_TRANSACTION` goes to `Binder.onTransact`, as the vibrator shim had to (the lights shim does not do this, and `service list` shows its descriptor as `[]`; it works because system_server is a Java client).
+
+Checks done: `sh tools/health/build.sh` (one dex with `HealthShim`, `HealthCore`, `HealthCore$Info` and three anonymous classes, no `invoke-custom`), `sh tools/health/test.sh` (host JVM, fake sysfs trees: the tablet as measured, unplugged, really full, tolerance, missing files, garbage, name tables,
+parcel layout), `sh -n` and `bash -n` on the scripts.
+
+Not verified: everything on the tablet (the parcel code runs only inside Android, so a host test cannot exercise `writeHealthInfo`); that the shim registers in time (BatteryService is created early in system_server; if the fragment is declared and the shim does not come up, system_server waits for it forever and the boot hangs,
+so install the jar, script and rc before the fragment and keep a way to delete the fragment from TWRP); that `servicemanager` accepts the unmarked binder for this name (it did for lights and vibrator); that `servicemanager` re-reads the vendor manifest without a reboot (expected: it caches it);
+whether the level keeps following the gauge when the charger is removed, and the sign of `current_now` while discharging (only the source says so; the tablet has been on USB the whole time); whether other AIDL clients of IHealth (`storaged` for disk statistics) lose data now that the AIDL instance answers
+`getStorageInfo` and `getDiskStats` as unsupported; the X606V kernel's real reason for the stale `capacity` and `status`; that `usb/current_max` 500000 is a constant.

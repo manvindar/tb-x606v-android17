@@ -8,6 +8,7 @@
 #   5. media_codecs_mediatek_video.xml without the software-only OMX.MTK.VIDEO.DECODER.VP9 (YouTube then uses hardware H.264)
 #   6. AIDL lights HAL declaration for the brightness shim (/vendor/etc/vintf/manifest/android.hardware.light-aidl.xml)
 #      and AIDL vibrator HAL declaration for the haptics shim (/vendor/etc/vintf/manifest/android.hardware.vibrator-aidl.xml)
+#      and AIDL health HAL declaration for the battery shim (/vendor/etc/vintf/manifest/android.hardware.health-aidl.xml)
 #   8. Dolby Atmos support (always applied, harmless without the Dolby apps): the stock libswdap.so with a 4 byte patch against an audio HAL double free
 #      (tools/dolby/patch_libswdap.py, made from the tablet's own library) and vendor_mac_permissions.xml with the signers of the Dolby apps (tools/dolby)
 set -e
@@ -33,7 +34,8 @@ sh('umount /mnt/v')
 PY
 $ADB push $D/lights/vintf_light_aidl.xml /tmp/light.xml >/dev/null
 $ADB push $D/vibrator/vintf_vibrator_aidl.xml /tmp/vibrator.xml >/dev/null
-$ADB shell 'mount -t ext4 -o rw /dev/block/by-name/vendor /mnt/v2 2>/dev/null; mkdir -p /mnt/v2/etc/vintf/manifest; cat /tmp/light.xml > /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; chmod 644 /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; chcon u:object_r:vendor_configs_file:s0 /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; cat /tmp/vibrator.xml > /mnt/v2/etc/vintf/manifest/android.hardware.vibrator-aidl.xml; chmod 644 /mnt/v2/etc/vintf/manifest/android.hardware.vibrator-aidl.xml; chcon u:object_r:vendor_configs_file:s0 /mnt/v2/etc/vintf/manifest/android.hardware.vibrator-aidl.xml; sync; umount /mnt/v2'
+$ADB push $D/health/vintf_health_aidl.xml /tmp/health.xml >/dev/null
+$ADB shell 'mount -t ext4 -o rw /dev/block/by-name/vendor /mnt/v2 2>/dev/null; mkdir -p /mnt/v2/etc/vintf/manifest; cat /tmp/light.xml > /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; chmod 644 /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; chcon u:object_r:vendor_configs_file:s0 /mnt/v2/etc/vintf/manifest/android.hardware.light-aidl.xml; cat /tmp/vibrator.xml > /mnt/v2/etc/vintf/manifest/android.hardware.vibrator-aidl.xml; chmod 644 /mnt/v2/etc/vintf/manifest/android.hardware.vibrator-aidl.xml; chcon u:object_r:vendor_configs_file:s0 /mnt/v2/etc/vintf/manifest/android.hardware.vibrator-aidl.xml; cat /tmp/health.xml > /mnt/v2/etc/vintf/manifest/android.hardware.health-aidl.xml; chmod 644 /mnt/v2/etc/vintf/manifest/android.hardware.health-aidl.xml; chcon u:object_r:vendor_configs_file:s0 /mnt/v2/etc/vintf/manifest/android.hardware.health-aidl.xml; sync; umount /mnt/v2'
 # 7. audio_policy_configuration.xml without the deep_buffer output (Dolby's DAP effect sits on the primary output only; media plays on deep_buffer otherwise)
 $ADB shell 'mount -t ext4 -o rw /dev/block/by-name/vendor /mnt/v2 2>/dev/null; F=/mnt/v2/etc/audio_policy_configuration.xml; grep -q "name=\"deep_buffer\"" $F && { [ -f $F.orig-dolby ] || cat $F > $F.orig-dolby; awk "index(\$0, \"<mixPort name=\\\"deep_buffer\\\"\") { skip = 1 } !skip { print } skip && /<\\/mixPort>/ { skip = 0 }" $F.orig-dolby | sed "s/,deep_buffer//g" > /tmp/apc.new; cat /tmp/apc.new > $F; }; sync; umount /mnt/v2'
 # 8. Dolby: (cat > file overwrites the existing inode, so owner and SELinux label stay) patch the tablet's own libswdap.so (kept as libswdap.so.orig-dolby) and map the Lenovo and local Dolby signers to seinfo=platform

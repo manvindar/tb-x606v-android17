@@ -15,7 +15,7 @@ Everything is done offline with debugfs (no mount, runs on macOS and Linux). Ste
    6  services.jar (HintManagerService with no AIDL power HAL), service-connectivity.jar, and the tethering/bluetooth/swcodec APEX files that must be patched but are signed:
       patched copies in /system/etc/bpf.a17 and /system/bin/netbpfload.{a17,tracer}, bind-mounted by 00_bpf_bind.rc
    7  audio: Android 16's audioserver and library closure run privately from /system/lib64/a16audio; the A17 clients get A16's AIDL numbers
-   8  lmkd replacement for the in-kernel low memory killer, lights shim (brightness), vibrator shim (haptics), RT cgroup budgets, aee off, init.rc console only on request
+   8  lmkd replacement for the in-kernel low memory killer, lights shim (brightness), vibrator shim (haptics), health shim (battery), RT cgroup budgets, aee off, init.rc console only on request
    9  ROM Tuner app + daemon and the Gemini boot animation (from the Android 16 port repo)
   10  optional MindTheGapps (the same file selection as tools/scripts/install_gapps.sh)
   --dolby DIR   Dolby Atmos from your own copy of the Lenovo firmware: DaxUI.apk, daxService.patched.apk (or daxService.apk), com.dolby.daxservice.xml (not redistributable)
@@ -293,8 +293,8 @@ replace(S, '/system/bin/audioserver', cl + '/audioserver')
 rc = cat(S, '/system/etc/init/audioserver.rc').decode(); first, rest = rc.split('\n', 1); assert first.startswith('service audioserver ')
 replace(S, '/system/etc/init/audioserver.rc', tmpf('audioserver.rc', first + '\n    setenv LD_LIBRARY_PATH /system/lib64/a16audio\n' + rest))
 
-# 8 lmkd, lights, vibrator, init.rc -------------------------------------------------------------------------------------------------
-print('8 lmkd, lights, vibrator, console')
+# 8 lmkd, lights, vibrator, health, init.rc -------------------------------------------------------------------------------------------------
+print('8 lmkd, lights, vibrator, health, console')
 replace(S, '/system/bin/lmkd', wp('lmkd'))
 rc = cat(S, '/system/etc/init/lmkd.rc').decode(); assert '    critical\n' in rc    # lmkd is critical: if it dies the tablet reboots
 replace(S, '/system/etc/init/lmkd.rc', tmpf('lmkd.rc', rc.replace('    critical\n', '', 1)))
@@ -310,6 +310,11 @@ put(os.path.join(TOOLS, 'lights', 'lightsshim.sh'), '/system/bin/lightsshim.sh',
 run('sh', os.path.join(TOOLS, 'vibrator', 'build.sh'), env=dict(os.environ, ANDROID_HOME=os.path.abspath(os.path.join(BT, '..', '..')), BUILD_TOOLS=BT))
 put(os.path.join(TOOLS, 'vibrator', 'out', 'vibratorshim.jar'), '/system/etc/vibratorshim.jar', '644')
 put(os.path.join(TOOLS, 'vibrator', 'vibratorshim.sh'), '/system/bin/vibratorshim.sh', '755'); put(os.path.join(TOOLS, 'vibrator', 'vibratorshim.rc'), '/system/etc/init/vibratorshim.rc', '644')
+# health: same pattern, the AIDL IHealth/default shim that gives BatteryService the real level, voltage and temperature (its vintf fragment goes on /vendor, see tools/scripts/apply_vendor_a17.sh).
+# Install order matters on a live system: with the fragment declared and no service registered, BatteryService waits for the HAL forever.
+run('sh', os.path.join(TOOLS, 'health', 'build.sh'), env=dict(os.environ, ANDROID_HOME=os.path.abspath(os.path.join(BT, '..', '..')), BUILD_TOOLS=BT))
+put(os.path.join(TOOLS, 'health', 'out', 'healthshim.jar'), '/system/etc/healthshim.jar', '644')
+put(os.path.join(TOOLS, 'health', 'healthshim.sh'), '/system/bin/healthshim.sh', '755'); put(os.path.join(TOOLS, 'health', 'healthshim.rc'), '/system/etc/init/healthshim.rc', '644')
 # init.rc starts the UART console on debuggable builds and ActivityManager then warns "Serial console enabled, performance is impacted" every boot
 rc = cat(S, '/system/etc/init/hw/init.rc').decode(); old = 'on init && property:ro.debuggable=1\n    start console\n'; assert old in rc
 replace(S, '/system/etc/init/hw/init.rc', tmpf('init.rc', rc.replace(old, '# console shell on the UART only when asked (ROM Tuner: Serial console). ActivityManager shows a performance warning whenever init.svc.console is running.\n'

@@ -1,7 +1,7 @@
 # Vendor-partition changes Android 17 needs on the TB-X606V's stock Android 10 vendor, in plain busybox sh (runs inside TWRP, no host tools).
 # Same edits as tools/scripts/apply_vendor_a17.sh. Idempotent; originals are kept as *.orig-a17 / *.orig-mp2 / *.orig-vp9.
 # Source this file and call:  apply_vendor_edits /path/to/mounted/vendor /path/to/payload
-# (payload holds light_aidl.xml and vibrator_aidl.xml). Files are rewritten with `cat new > old`, which keeps the inode and the SELinux label.
+# (payload holds light_aidl.xml, vibrator_aidl.xml and health_aidl.xml). Files are rewritten with `cat new > old`, which keeps the inode and the SELinux label.
 apply_vendor_edits() {
   V=$1; P=$2
   # 1 fstabs: Android 17 treats the legacy flags forcefdeorfbe= and resize as a parse error (init cannot read the fstab, /data never mounts); add /metadata
@@ -67,5 +67,11 @@ apply_vendor_edits() {
     cat $P/vibrator_aidl.xml > $V/etc/vintf/manifest/android.hardware.vibrator-aidl.xml
     chmod 644 $V/etc/vintf/manifest/android.hardware.vibrator-aidl.xml; chcon u:object_r:vendor_configs_file:s0 $V/etc/vintf/manifest/android.hardware.vibrator-aidl.xml 2>/dev/null
     echo "vendor: vibrator AIDL declaration written"
+  fi
+  # 6c AIDL health HAL declaration for the Java battery shim (the vendor only has health@2.0, whose BatteryMonitor reads voltage and temperature from the fake mm8013 supply)
+  if [ -f $P/health_aidl.xml ]; then
+    cat $P/health_aidl.xml > $V/etc/vintf/manifest/android.hardware.health-aidl.xml
+    chmod 644 $V/etc/vintf/manifest/android.hardware.health-aidl.xml; chcon u:object_r:vendor_configs_file:s0 $V/etc/vintf/manifest/android.hardware.health-aidl.xml 2>/dev/null
+    echo "vendor: health AIDL declaration written"
   fi
 }

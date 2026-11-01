@@ -10,8 +10,8 @@ for a in "$@"; do case $a in --no-wipe) WIPE=0;; --vendor-only) FLASH=0; WIPE=0;
 OUT=$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")
 SPLIT_MB=1536; W=$(mktemp -d); mkdir -p $W/zip/META-INF/com/google/android $W/zip/payload $W/zip/system
 cp $D/update-binary $D/updater-script $W/zip/META-INF/com/google/android/
-cp $D/vendor_edits.sh $T/lights/vintf_light_aidl.xml $T/vibrator/vintf_vibrator_aidl.xml $T/firstboot/firstboot_dexopt.sh $T/firstboot/zz_firstboot_dexopt.rc $T/scripts/dexopt_all.sh $T/vbmeta/vbmeta-disabled.img $W/zip/payload/
-mv $W/zip/payload/vintf_light_aidl.xml $W/zip/payload/light_aidl.xml; mv $W/zip/payload/vintf_vibrator_aidl.xml $W/zip/payload/vibrator_aidl.xml
+cp $D/vendor_edits.sh $T/lights/vintf_light_aidl.xml $T/vibrator/vintf_vibrator_aidl.xml $T/health/vintf_health_aidl.xml $T/firstboot/firstboot_dexopt.sh $T/firstboot/zz_firstboot_dexopt.rc $T/scripts/dexopt_all.sh $T/vbmeta/vbmeta-disabled.img $W/zip/payload/
+mv $W/zip/payload/vintf_light_aidl.xml $W/zip/payload/light_aidl.xml; mv $W/zip/payload/vintf_vibrator_aidl.xml $W/zip/payload/vibrator_aidl.xml; mv $W/zip/payload/vintf_health_aidl.xml $W/zip/payload/health_aidl.xml
 SIZE=0; SHA=none
 if [ $FLASH = 1 ]; then
   case $IMG in *.xz) echo "unpacking..."; xz -dc "$IMG" > $W/system.img;; *) cp "$IMG" $W/system.img;; esac
