@@ -60,7 +60,7 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 |---|---|
 | ![Home](docs/screenshots/home.png) | ![Bluetooth](docs/screenshots/bluetooth.png) |
 
-## Status (2026-10-27)
+## Status (2026-11-01)
 
 | Area | State |
 |---|---|
@@ -71,9 +71,12 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 | Network location (Wi-Fi positioning) | works (services.jar patch plus the Play services opt-in, see "GPS") |
 | Camera | works (video encoding untested; the MediaTek encoders log "unsupported parameter") |
 | Brightness | works, through a Java AIDL lights shim (`tools/lights`) |
-| Vibration (haptics) | shim written and checked on a host only, not yet run on the tablet (`tools/vibrator`, see "Vibrator" in `docs/ANALYSIS.md`) |
-| Battery (level, voltage, temperature, health) | shim written and checked on a host only, not yet run on the tablet (`tools/health`, see "Battery" in `docs/ANALYSIS.md`). Without it Android shows 100 percent, 0 V and -9.9 C |
+| Vibration (haptics) | works, through an AIDL vibrator shim (`tools/vibrator`, see "Vibrator" in `docs/ANALYSIS.md`); the motor takes 25 ms or longer pulses and has no amplitude control |
+| Battery (level, voltage, temperature, health) | works, through an AIDL health shim (`tools/health`, see "Battery" in `docs/ANALYSIS.md`). Without it Android shows 100 percent, 0 V and -99 degrees (the vendor health service reads an unfitted gauge chip and the kernel's capacity is stale). Checked while charging; behaviour after unplugging not checked |
 | Keyboard (AOSP LatinIME) | works |
+| Settings two-pane layout, Pixel apps, Hub mode app, theme packs, Dolby Atmos | in the Pixel edition (see below); Hub mode and Device Health Services are not confirmed working, Theme packs show "coming soon" because Google's server returns no packs for this device |
+| ROM Tuner | presets, per app compile with live progress, tweak options, GPU overclock page (the CPU cannot be overclocked), picture controls, profiles, two-pane landscape layout (`rom-tuner` in the Android 16 port repo) |
+| Ubuntu 22.04 | runs in a chroot on Android's kernel, command line only (`docs/LINUX.md`) |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
 | Bluetooth | works: turns on, scans, pairs, and connects (HFP and A2DP with a Bose QC 45; the A2DP stream starts and stops with playback) |
 | Audio output | works (also in apps, YouTube plays with sound) through Android 16's `audioserver` and library closure run privately (`tools/audio`) |
@@ -249,12 +252,14 @@ no allowlist grants (a miss makes `system_server` abort at boot; with `--dev-too
 `docs/PIXEL.md` lists what each boot failure looked like and how it was fixed.
 Pixel Settings only shows its two-pane layout when `persist.settings.large_screen_opt.enabled` is true; the builder sets it with `--pixel-tablet` (`docs/PIXEL.md`, "Settings two-pane / tablet UI", with a live test that needs no rebuild).
 
-**A prebuilt image.** The pre-release `v17-dp11-261016-pixel-r1` is the image I run (built with `--dev-tools`). It contains Google's Pixel Tablet apps and MindTheGapps under Google's terms and is published at my own decision as a convenience; it can be removed. Only the system image was flashed and tested on one TB-X606V. Install it like the other releases (`tools/scripts/install_a17.sh`).
+**Prebuilt images.** The pre-release `v17-dp11-261016-pixel-r3` is the newest Pixel image (built with `--dev-tools`; it has everything in this README, but it has not been booted yet). `v17-dp11-261016-pixel-r2` has the first set of fixes and `v17-dp11-261016-pixel-r1` is the image that was booted and used for a day. They contain Google's Pixel Tablet apps and MindTheGapps under Google's terms and are published at my own decision as a convenience; they can be removed. Install like the other releases (`tools/scripts/install_a17.sh`, branch `exp/pixel-tablet`).
 
 What the layer needed beyond booting (details in `docs/PIXEL.md`):
 - **Setup wizard.** The GSI ships AOSP `Provision` as a second `SETUP_WIZARD` activity. With two, PackageManager names no setup wizard and the `signature|setup` permission `NETWORK_SETUP_WIZARD` is never granted, so the Google wizard crashed on its Wi-Fi page. The builder deletes `Provision.apk` (disabling it with `pm` is not enough, the check ignores the disabled state). "Not now" on the screen lock page used to return to date and time forever; `tools/pixel/wizard_lock_skip.sh` notices that and finishes setup. The wizard works offline ("Set up offline"), ending on the Pixel launcher.
 - **Boot animation.** The Pixel Tablet animation is made for a 2560x1600 landscape canvas and bootanimation stretches the canvas of `desc.txt` to the screen, which squeezed the Google logo from the sides on this 1200x1920 panel. `tools/pixel/fit_bootanimation.py` makes the canvas the screen size and keeps every frame at its original pixel size and its offset from the centre.
 - **Speed.** The Pixel Launcher app drawer: 22 to 30% janky frames interpreted, 0 to 2% compiled (see "Compiled app code" above). The animation scale defaults to 0.6 (also stored in the ROM Tuner state, which re-applies it at every boot). The notification shade stays slow (about 100 ms per frame, GPU bound, `docs/PERFORMANCE.md`).
+
+Answers to questions about this tablet (CPU-Z unknowns, Cast, 4K, USB-C video, Windows, native Linux, Theme packs) are in `docs/QUESTIONS.md`.
 
 ## Build the image yourself
 
