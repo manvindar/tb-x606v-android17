@@ -68,8 +68,9 @@ FILES = [('product', '/overlay/PixelConfigOverlayCommon.apk', 'overlay/PixelConf
          ('product', '/media/bootanimation-dark.zip', 'media/bootanimation-pixel-dark.zip')]
 DIRS = [('product', '/fonts', 'fonts'), ('product', '/media/audio', 'media/audio'), ('product', '/wallpaper', 'wallpaper'),
         ('product', '/etc/permissions', 'etc/permissions'), ('product', '/etc/sysconfig', 'etc/sysconfig'), ('product', '/etc/default-permissions', 'etc/default-permissions')]
-RESIGN = ('system_ext/priv-app/SystemUI/SystemUITitan.apk', 'system_ext/priv-app/Settings/SettingsGoogle.apk', 'system_ext/priv-app/NexusLauncherRelease/NexusLauncherRelease.apk',
-          'system_ext/priv-app/WallpaperPickerGoogleRelease/WallpaperPickerGoogleRelease.apk')
+# The wallpaper picker is NOT re-signed: its Theme packs tile asks a Google backend, which answers PERMISSION_DENIED "Rejected by (1st-party only Allowlist) security policy.
+# Not google-signed." for the AOSP-test-key copy, and the tile stays greyed. Its signature-level permissions are `preinstalled` or its own, so Google's signature is enough.
+RESIGN = ('system_ext/priv-app/SystemUI/SystemUITitan.apk', 'system_ext/priv-app/Settings/SettingsGoogle.apk', 'system_ext/priv-app/NexusLauncherRelease/NexusLauncherRelease.apk')
 RENAME = {'system_ext/priv-app/SystemUI/SystemUITitan.apk': 'SystemUI.apk', 'system_ext/priv-app/Settings/SettingsGoogle.apk': 'Settings.apk'}
 def sh(*c, **k): return subprocess.run(c, capture_output=True, text=True, **k)
 def dump(img, src, dst):
