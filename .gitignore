@@ -6,3 +6,4 @@
 logs/
 tools/lights/out/
 __pycache__/
+tools/vibrator/out/

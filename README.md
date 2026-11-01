@@ -45,7 +45,7 @@ empty vbmeta with the verification-disabled flag (made with `avbtool make_vbmeta
 `nvram`, `nvdata`, `proinfo`, `persist` and every other partition (so TWRP and your IMEI/MAC data stay as they are).
 
 **Vendor edits** (`apply_vendor_a17.sh`, once, from TWRP; originals are saved as `*.orig-a17`/`*.orig-mp2`/`*.orig-vp9`): the fstab legacy flags Android 17 rejects and a `/metadata` line, `ueventd.rc` with `/dev/ion` opened,
-seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed from the codec lists, and the AIDL lights declaration for the brightness shim.
+seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed from the codec lists, and the AIDL lights and vibrator declarations for the brightness and haptics shims.
 
 **Going back:** flash your backup (`fastboot flash system system.img` from the Android 10 firmware or from `backup_partitions.sh`, plus `vendor.img` if you want the vendor files back exactly) and wipe data.
 `tools/restore_stock_boot.md` covers a tablet that no longer reaches the bootloader. After a flash the image compiles its own apps (see "Compiled app code" below); `tools/scripts/dexopt_all.sh` is only needed for apps you install later, or the "Compile apps now" button in ROM Tuner.
@@ -71,6 +71,7 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 | Network location (Wi-Fi positioning) | works (services.jar patch plus the Play services opt-in, see "GPS") |
 | Camera | works (video encoding untested; the MediaTek encoders log "unsupported parameter") |
 | Brightness | works, through a Java AIDL lights shim (`tools/lights`) |
+| Vibration (haptics) | shim written and checked on a host only, not yet run on the tablet (`tools/vibrator`, see "Vibrator" in `docs/ANALYSIS.md`) |
 | Keyboard (AOSP LatinIME) | works |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
 | Bluetooth | works: turns on, scans, pairs, and connects (HFP and A2DP with a Bose QC 45; the A2DP stream starts and stops with playback) |
@@ -221,13 +222,15 @@ Each item came from a real failure. `docs/ANALYSIS.md` has the evidence and the 
   speaks the lmkd protocol and drives the old in-kernel killer.
 - **Brightness.** Android 17 only talks to the AIDL lights HAL and the vendor only has HIDL. The shim registers `android.hardware.light.ILights/default`
   (declared in a vendor VINTF fragment) and writes `/sys/class/leds/lcd-backlight/brightness`.
+- **Vibrator.** Same situation: Android 17 only looks for the AIDL `android.hardware.vibrator.IVibrator/default` and the vendor only has the HIDL 1.0 HAL, so every haptic was `ignored_unsupported`.
+  `tools/vibrator` registers that AIDL instance (version 1, vendor VINTF fragment like the lights one) and drives `/sys/class/leds/vibrator/{duration,activate}`. Untested on the tablet.
 - **Bluetooth** (`tools/bpf/patch_bluetooth.py`): the controller answers an optional command with an unknown-command status that the stack treats as fatal, and
   then a check for Secure Simple Pairing aborts. Both branches are patched.
 
 ## Build the image yourself
 
 `build/build_image17.py` turns Google's GSI into the tested image offline, with debugfs (no mount, runs on macOS and Linux). It applies every patch in `tools/` (libc and linkers, libui, libbinder, services.jar, the BPF
-and Bluetooth binaries, the repacked runtime and virt APEXes, the Android 16 audio stack, lmkd, the lights shim, ROM Tuner and the Gemini boot animation, init and rc files) and optionally MindTheGapps.
+and Bluetooth binaries, the repacked runtime and virt APEXes, the Android 16 audio stack, lmkd, the lights and vibrator shims, ROM Tuner and the Gemini boot animation, init and rc files) and optionally MindTheGapps.
 It needs: e2fsprogs, python3 with `capstone`, zig (`pip install ziglang` also works), a JDK and the Android SDK (`build-tools;35.0.0`, `platforms;android-34`), openssl, zip, `erofs-utils` (`fsck.erofs`), and about 20 GB of disk.
 ```sh
 # inputs: system.img from Google's GSI zip (DP11.261002.005, raw ext4), the LineageOS 23.2 GSI (.img), MindTheGapps-16.0.0-arm64 zip, and the Android 16 port repo next to this one
@@ -246,7 +249,7 @@ Optional layers, both off by default and neither redistributable (so neither is 
 Install the result like any other image (`tools/scripts/install_a17.sh`). The vendor edits are a separate step (`apply_vendor_a17.sh`, done by the installer).
 
 How well the builder matches the tested tablet image: `verify_image.py` finds every file identical (including the repacked APEX payloads) except the compiled app code, files that were only backups or experiments on the tablet
-(`*.a17orig`, `*.orig-a17`, the unused Android 5.0 audio HAL leftovers), Dolby, the two zig-built helpers (`lmkd`, `netbpfload.tracer`: same source, different compiler output), the lights jar (zip timestamps) and `/system/build.prop`,
+(`*.a17orig`, `*.orig-a17`, the unused Android 5.0 audio HAL leftovers), Dolby, the two zig-built helpers (`lmkd`, `netbpfload.tracer`: same source, different compiler output), the lights and vibrator jars (zip timestamps) and `/system/build.prop`,
 which now also has `persist.traced.enable=0`. The boot diagnostics service is off unless you pass `--with-bootdiag`.
 
 ## Using the tools one by one
