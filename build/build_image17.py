@@ -154,6 +154,7 @@ bp += '\npersist.sys.bt.unsupported.commands=182\npersist.sys.usb.config=adb\nro
 bp += 'dalvik.vm.usap_pool_enabled=true\ndalvik.vm.usap_pool_size_max=4\ndalvik.vm.usap_pool_refill_threshold=2\n'    # pre-forked app processes: faster app start, GSIs ship it off
 bp += 'persist.vendor.sys.pq.shp.idx=0\n'     # MediaTek sharpening off by default: it makes video look worse (ROM Tuner > Picture quality changes it)
 bp += 'persist.sysui.disableBlur=1\n'     # window blur (Pixel Launcher drawer, shade) drops the GE8320 to ~17 fps: 72% janky frames with blur, 5% without
+bp += 'pm.dexopt.install=speed\npm.dexopt.install-bulk=speed\n'     # compile apps fully when the Play Store installs or updates them (default speed-profile has no profile yet, so the app ran uncompiled until the nightly job)
 bp += 'persist.traced.enable=0\n'    # perfetto traced crash-loops on kernel 4.9 (no vsock) and flags_health_check retries every 5 s
 # stock-looking fingerprint assembled from the Lenovo vendor props (build id and incremental of V9.56). Made up: Lenovo's real one is not on the tablet, so Play does not know it
 bp += ('ro.build.fingerprint=Lenovo/full_achilles6_row_call/achilles6_row_call:10/QP1A.190711.020/TB-X606V_USR_S300665_2206300345_V9.56_BMP_ROW:user/release-keys\n'
