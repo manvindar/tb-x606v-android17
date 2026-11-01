@@ -65,7 +65,8 @@ public class VibratorShim extends Binder {
         // 6 setAmplitude, 7 setExternalControl, 8 and 9 composition limits, 10 and 11 primitives, 12 compose, 13 to 15 always-on, and
         // any newer method a V5 client might still call: not supported (the client only calls most of them when a capability bit says so)
         if (code >= 1 && code < 0x00FFFFFE) return unsupported(reply);
-        return false;
+        try { return super.onTransact(code, data, reply, flags); }   // INTERFACE_TRANSACTION (interface descriptor): without it the NDK client sees descriptor '' and refuses the binder
+        catch (android.os.RemoteException e) { return false; }
     }
 
     static boolean unsupported(Parcel reply) {
