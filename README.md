@@ -244,6 +244,7 @@ python3 build/build_image17.py --gsi system.img --donor LineageOS-23.2-GSI.img -
 `stage_pixel_tablet.py` re-signs SystemUI, Settings, the launcher and the wallpaper picker with the public AOSP platform test key (the GSI's platform certificate); every other app keeps Google's signature. The builder checks that no priv-app asks for a privileged permission that
 no allowlist grants (a miss makes `system_server` abort at boot; with `--dev-tools` the missing entries are allowlisted from a generated file). When you flash it over existing data, clear `/data/system/package_cache` from TWRP first (or wipe).
 `docs/PIXEL.md` lists what each boot failure looked like and how it was fixed.
+Pixel Settings only shows its two-pane layout when `persist.settings.large_screen_opt.enabled` is true; the builder sets it with `--pixel-tablet` (`docs/PIXEL.md`, "Settings two-pane / tablet UI", with a live test that needs no rebuild).
 
 **A prebuilt image.** The pre-release `v17-dp11-261016-pixel-r1` is the image I run (built with `--dev-tools`). It contains Google's Pixel Tablet apps and MindTheGapps under Google's terms and is published at my own decision as a convenience; it can be removed. Only the system image was flashed and tested on one TB-X606V. Install it like the other releases (`tools/scripts/install_a17.sh`).
 

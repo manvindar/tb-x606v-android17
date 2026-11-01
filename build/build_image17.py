@@ -176,6 +176,9 @@ replace(S, '/system/build.prop', tmpf('build.prop', bp))
 pb = cat(S, '/system/product/etc/build.prop').decode()
 for k, v in (('brand', 'Lenovo'), ('device', 'achilles6_row_call'), ('manufacturer', 'LENOVO'), ('model', 'Lenovo TB-X606V'), ('name', 'full_achilles6_row_call')):
     pb, n = re.subn(r'(?m)^ro\.product\.product\.%s=.*$' % k, 'ro.product.product.%s=%s' % (k, v), pb); assert n == 1, k
+if a.pixel_tablet:
+    # the GSI says "default"; the stock Lenovo firmware said "tablet". Read by Settings (media output and illustration icons), Play services, Gboard (only "desktop"), setup wizard, Wellbeing, Google app. Read only at boot
+    pb, n = re.subn(r'(?m)^ro\.build\.characteristics=.*$', 'ro.build.characteristics=tablet', pb); assert n == 1, 'ro.build.characteristics'
 replace(S, '/system/product/etc/build.prop', tmpf('product.build.prop', pb))
 
 # 3 patched libraries --------------------------------------------------------------------------------------------------
