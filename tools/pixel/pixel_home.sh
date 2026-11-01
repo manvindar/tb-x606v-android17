@@ -38,7 +38,10 @@ touch $M
 fi
 # Hub mode (com.google.assistant.hubui), once per /data with its own marker so that a system flashed over old data still gets it: Hub mode on, screen saver on with the Clocks dream,
 # started while charging or docked. The Pixel's TitanConfigOverlay (which carries these defaults) is not installed, it forces gesture navigation.
+# The setup wizard turns the screen saver off when it finishes (screensaver_enabled read 0 after setup although it had been set here), so wait for the end of setup first.
 if [ ! -e $H ] && pm list packages 2>/dev/null | grep -q 'package:com.google.assistant.hubui$'; then
+  while [ "$(settings get secure user_setup_complete)" != 1 ]; do sleep 10; done
+  sleep 20
   settings put secure glanceable_hub_enabled 1
   settings put secure screensaver_enabled 1
   settings put secure screensaver_components com.google.assistant.hubui/com.google.assistant.hubui.dream.ClockFacesDreamService
