@@ -156,3 +156,36 @@ Chrome opened but loaded nothing. Network was fine; the log showed `AppZygote: E
 The next failure was in the child: `thread 'main' panicked at system/zygote/zygote/src/child_process.rs:81:43: Failed to check capability bound: GetCapBoundFailure(EINVAL)`, found with a ptrace logger (`write(2, ...)` buffers read out of the dying child).
 Stub 2 turns EINVAL for capabilities 38 to 40 into success. The first version did that for every capability and froze `system_server` in zygote's `for (i = 0; prctl(PR_CAPBSET_READ, i) >= 0; i++)` loop (boot stuck on the animation, recovered through TWRP by removing the bind mount).
 Verified by binding the final libc after boot and restarting zygote: `com.android.chrome_zygote_native` and several `sandboxed_process0` services run and Chrome loads pages.
+
+## Vibrator (2026-10-31)
+
+Status: the shim is written, builds and passes a host test. It has not been run on the tablet.
+
+Symptom: `dumpsys vibrator_manager` shows `Legacy HAL VibratorManager vibratorIds = []` and every haptic is `ignored_unsupported`, although the tablet has a motor
+(`/sys/class/leds/vibrator`, kernel thread `mtk_vibrator`) and the vendor runs `android.hardware.vibrator@1.0-service`. The Android 17 client in `libandroid_servers.so`
+links `android.hardware.vibrator-V5-ndk.so` and has only AIDL providers (`HalProvider<IVibratorManager>`, `HalProvider<IVibrator>`, no HIDL symbols), and the
+A17 compatibility matrix (202604) lists `android.hardware.vibrator` as AIDL (IVibrator and IVibratorManager, versions 1 to 4). The vendor VINTF manifest has the HIDL entry only.
+
+What `tools/vibrator` does: a Java service in `app_process`, same method as `tools/lights`. It registers `android.hardware.vibrator.IVibrator/default` and parses the AIDL parcels by hand.
+It declares interface version 1 (`vintf_vibrator_aidl.xml`, installed to `/vendor/etc/vintf/manifest/android.hardware.vibrator-aidl.xml` by `apply_vendor_a17.sh` and the TWRP zip).
+Version 1 is the smallest surface that is enough: the matrix accepts 1 to 4, and the client only calls the newer methods when a capability bit asks for them. Transaction codes are 1 plus the method index
+in the frozen version 1 `IVibrator.aidl`; they were checked against `BpVibrator::{getCapabilities,off,on,perform,setAmplitude}` in the device's V5 library (codes 1, 2, 3, 4, 6).
+Anything else that is called gets `EX_UNSUPPORTED_OPERATION`.
+
+Capabilities: `CAP_ON_CALLBACK | CAP_PERFORM_CALLBACK`. The shim does call back (`IVibratorCallback.onComplete`, a oneway call) when a pulse ends, and also when `off()` or a new call
+cancels a running one, as the interface comment asks. No amplitude control: the kernel driver (`drivers/misc/mediatek/vibrator/vibrator_drv.c`) registers only `activate`, `duration` and `state`
+on a LED class device without a brightness callback, so `brightness` (max 255) is not wired to anything. No external control, composition or always-on. Supported effects: CLICK, TICK, HEAVY_CLICK, DOUBLE_CLICK
+(30, 25, 50 ms, and 30 on, 60 off, 30 on); other effects are `EX_UNSUPPORTED_OPERATION` and the framework falls back to its own on/off pulse.
+
+Driver behaviour that shaped it: `duration` is write only (reading it gives an I/O error) and only stores the value; `activate=1` starts a pulse of that length and an hrtimer in the driver ends it; `activate=0` stops it.
+So the shim writes `duration` first, then `activate`. The driver raises a duration above 9 ms and below `vib_timer` to `vib_timer`, which is 25 on this tablet (device tree `odm/vibrator@0`: `vib_timer=25`, `vib_limit=9`),
+and caps one pulse at 15000 ms. That is why every effect pulse is at least 25 ms and why `on()` longer than 15 s is cut to 15 s. The stock vendor HAL (`vibrator.default.so`, the libhardware LED trigger code)
+writes the same two nodes in the same order, so the shim and the HIDL service do not disagree; the HIDL service only writes when something calls it, and nothing does.
+
+Checks done: `sh tools/vibrator/build.sh` (d8 output has `VibratorShim`, `VibratorCore` and three desugared lambda classes, no `invoke-custom`), `sh tools/vibrator/test.sh` (host JVM: write order and values,
+callback timing, `off()`, superseding, 15 s cap), `sh -n` on the scripts.
+
+Not verified: that `servicemanager` accepts the unmarked binder for this name and that `libandroid_servers` finds it (the lights shim works the same way, but this is a different client); that the framework
+retries the lookup after system_server started without the service (the old `libvibratorservice` cached a failed lookup for the life of the process, the new provider code is not available here); how the motor feels with
+25 to 50 ms pulses; whether an SELinux denial shows up with enforcing policy (the build is permissive); whether `servicemanager` re-reads `/vendor/etc/vintf/manifest` without a reboot (it is expected to cache it, so
+plan on a reboot after the fragment is first installed).
