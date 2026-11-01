@@ -167,6 +167,10 @@ bp += ("\n# Bluetooth profiles (what AOSP's bluetooth.mk sets; a GSI without it 
        'bluetooth.profile.hfp.ag.enabled=true\nbluetooth.profile.hid.host.enabled=true\nbluetooth.profile.hid.device.enabled=true\nbluetooth.profile.gatt.enabled=true\n'
        'bluetooth.profile.bas.client.enabled=true\nbluetooth.profile.opp.enabled=true\nbluetooth.profile.pan.nap.enabled=true\nbluetooth.profile.pan.panu.enabled=true\n'
        'bluetooth.profile.asha.central.enabled=true\n')
+if a.pixel_tablet:
+    # Pixel Settings (SettingsGoogle) shows its two-pane layout only if this property is true: ActivityEmbeddingUtils reads it once in a static initializer and logs
+    # "isSettingsSplitSupported = false" without it. The Pixel sets it in its own build.prop, which this GSI does not have (docs/PIXEL.md, "Settings two-pane / tablet UI")
+    bp += 'persist.settings.large_screen_opt.enabled=true\n'
 replace(S, '/system/build.prop', tmpf('build.prop', bp))
 # the tablet reports its real identity (the GSI says "AOSP on ARM64"): streaming apps pick their quality tier by model, and Netflix only offered SD to the generic one
 pb = cat(S, '/system/product/etc/build.prop').decode()
