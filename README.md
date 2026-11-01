@@ -60,7 +60,7 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 |---|---|
 | ![Home](docs/screenshots/home.png) | ![Bluetooth](docs/screenshots/bluetooth.png) |
 
-## Status (2026-10-27)
+## Status (2026-11-01)
 
 | Area | State |
 |---|---|
@@ -71,8 +71,8 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 | Network location (Wi-Fi positioning) | works (services.jar patch plus the Play services opt-in, see "GPS") |
 | Camera | works (video encoding untested; the MediaTek encoders log "unsupported parameter") |
 | Brightness | works, through a Java AIDL lights shim (`tools/lights`) |
-| Vibration (haptics) | shim written and checked on a host only, not yet run on the tablet (`tools/vibrator`, see "Vibrator" in `docs/ANALYSIS.md`) |
-| Battery (level, voltage, temperature, health) | shim written and checked on a host only, not yet run on the tablet (`tools/health`, see "Battery" in `docs/ANALYSIS.md`). Without it Android shows 100 percent, 0 V and -9.9 C |
+| Vibration (haptics) | works, through an AIDL vibrator shim (`tools/vibrator`, see "Vibrator" in `docs/ANALYSIS.md`); the motor takes 25 ms or longer pulses and has no amplitude control |
+| Battery (level, voltage, temperature, health) | works, through an AIDL health shim (`tools/health`, see "Battery" in `docs/ANALYSIS.md`). Without it Android shows 100 percent, 0 V and -99 degrees (the vendor health service reads an unfitted gauge chip and the kernel's capacity is stale). Checked while charging; behaviour after unplugging not checked |
 | Keyboard (AOSP LatinIME) | works |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
 | Bluetooth | works: turns on, scans, pairs, and connects (HFP and A2DP with a Bose QC 45; the A2DP stream starts and stops with playback) |
