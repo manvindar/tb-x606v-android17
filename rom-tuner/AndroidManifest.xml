@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.tablet.tuner">
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <application android:label="ROM Tuner" android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.DeviceDefault.DayNight" android:allowBackup="false">
-        <activity android:name=".MainActivity" android:exported="true" android:label="ROM Tuner" android:icon="@mipmap/ic_launcher">
+        <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density" android:label="ROM Tuner" android:icon="@mipmap/ic_launcher">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -12,6 +13,8 @@
                 <action android:name="com.android.settings.action.IA_SETTINGS" />
             </intent-filter>
             <meta-data android:name="com.android.settings.category" android:value="com.android.settings.category.ia.homepage" />
+            <meta-data android:name="com.android.settings.icon" android:resource="@drawable/ic_tuner" />
+            <meta-data android:name="com.android.settings.icon_tintable" android:value="true" />
             <meta-data android:name="com.android.settings.summary" android:value="Performance profiles, theme, display and system tweaks" />
         </activity>
         <service android:name=".PerfTile" android:exported="true" android:label="Performance" android:icon="@drawable/ic_tuner"

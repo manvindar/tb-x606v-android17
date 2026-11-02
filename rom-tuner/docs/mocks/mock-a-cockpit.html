@@ -1,0 +1,48 @@
+<!doctype html><meta charset=utf-8><link rel=stylesheet href=base.css><style>
+.h{display:flex;justify-content:space-between;align-items:center;padding:20px 48px 0}
+.h h1{font-size:60px;font-weight:500;letter-spacing:-.02em}
+.ic{width:72px;height:72px;border-radius:36px;background:var(--c-high);display:grid;place-items:center;font-size:34px;color:var(--on-var)}
+.hero{position:absolute;left:32px;right:32px;top:176px;height:900px;border-radius:56px;background:var(--c-low)}
+.center{position:absolute;left:0;width:1000px;top:262px;text-align:center}
+.center b{font-size:150px;font-weight:300;display:block;line-height:1}
+.center span{font-size:28px;color:var(--on-var)}
+.leg{position:absolute;left:36px;right:36px;bottom:36px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.leg div{background:var(--c);border-radius:32px;padding:24px 28px}
+.leg small{display:flex;align-items:center;gap:12px;font-size:23px;color:var(--on-var)}
+.leg i{width:16px;height:16px;border-radius:8px;display:inline-block}
+.leg strong{display:block;font-size:50px;font-weight:500;margin:8px 0 6px}
+.preset{position:absolute;left:32px;right:32px;top:1104px;height:270px;border-radius:48px;background:var(--c-low);padding:36px 44px}
+.preset .t{display:flex;justify-content:space-between;align-items:baseline}
+.preset .t b{font-size:48px;font-weight:500} .preset .t span{font-size:24px;color:var(--on-var)}
+.rail{position:absolute;left:44px;right:44px;top:132px;height:14px;border-radius:7px;background:var(--c-highest)}
+.rail .f{position:absolute;left:0;width:25%;height:14px;border-radius:7px;background:var(--primary)}
+.rail .d{position:absolute;top:-1px;width:16px;height:16px;border-radius:8px;background:var(--surface)}
+.rail .th{position:absolute;left:25%;top:-22px;width:56px;height:56px;margin-left:-28px;border-radius:28px;background:var(--primary);box-shadow:0 0 0 10px #b8c4ff30}
+.lab{position:absolute;left:44px;right:44px;top:176px;display:flex;justify-content:space-between;font-size:24px;color:var(--on-var)}
+.lab .s{color:var(--on);font-weight:600}
+.chips{position:absolute;left:32px;right:32px;top:1406px;display:flex;gap:14px;flex-wrap:wrap}
+.prof{position:absolute;left:32px;right:32px;top:1500px;height:150px;border-radius:40px;background:var(--primary-c);color:var(--on-primary-c);display:flex;align-items:center;justify-content:space-between;padding:0 44px}
+.prof b{font-size:34px;font-weight:500;display:block} .prof span{font-size:24px;opacity:.85}
+.btn{height:64px;padding:0 36px;border-radius:32px;background:var(--primary);color:var(--on-primary);font-size:26px;font-weight:600;display:grid;place-items:center}
+</style>
+<div class=sb><span>8:07</span><span>78%</span></div>
+<div class=h><h1>ROM Tuner</h1><div style="display:flex;gap:14px;align-items:center"><span class=chip style="height:56px">Applied</span><div class=ic>⌕</div></div></div>
+<div class=hero>
+ <svg width=1136 height=900 viewBox="0 0 1136 900" style="position:absolute;left:0;top:0;width:1136px">
+  <circle cx="568" cy="352" r="262" fill="none" stroke="var(--c-highest)" stroke-width="34" stroke-linecap="round" stroke-dasharray="1555.1 2073.5" transform="rotate(135 568 352)"/><circle cx="568" cy="352" r="262" fill="none" stroke="var(--primary)" stroke-width="34" stroke-linecap="round" stroke-dasharray="1555.1 2073.5" transform="rotate(135 568 352)"/><circle cx="568" cy="352" r="222" fill="none" stroke="var(--c-highest)" stroke-width="34" stroke-linecap="round" stroke-dasharray="1338.3 1784.4" transform="rotate(135 568 352)"/><circle cx="568" cy="352" r="222" fill="none" stroke="var(--secondary)" stroke-width="34" stroke-linecap="round" stroke-dasharray="1043.9 1784.4" transform="rotate(135 568 352)"/><circle cx="568" cy="352" r="182" fill="none" stroke="var(--c-highest)" stroke-width="34" stroke-linecap="round" stroke-dasharray="1121.5 1495.4" transform="rotate(135 568 352)"/><circle cx="568" cy="352" r="182" fill="none" stroke="var(--tertiary)" stroke-width="34" stroke-linecap="round" stroke-dasharray="1020.6 1495.4" transform="rotate(135 568 352)"/>
+ </svg>
+ <div class=center style="width:1136px"><b class=num>32°</b><span>chip temperature · limit 85°</span></div>
+ <div class=leg>
+  <div><small><i style="background:var(--primary)"></i>Fast cores</small><strong class=num>2.30</strong><span class=tag>GHz</span><svg width="250" height="56" viewBox="0 0 250 56"><path d="M0,6 L18,6 L36,0 L54,0 L71,0 L89,17 L107,17 L125,0 L143,0 L161,0 L179,0 L196,6 L214,0 L232,0 L250,0" fill="none" stroke="#b8c4ff" stroke-width="4" stroke-linejoin="round"/></svg></div>
+  <div><small><i style="background:var(--secondary)"></i>Slow cores</small><strong class=num>1.80</strong><span class=tag>GHz</span><svg width="250" height="56" viewBox="0 0 250 56"><path d="M0,22 L18,22 L36,11 L54,11 L71,12 L89,12 L107,28 L125,28 L143,12 L161,12 L179,12 L196,12 L214,21 L232,12 L250,12" fill="none" stroke="#c0c6dc" stroke-width="4" stroke-linejoin="round"/></svg></div>
+  <div><small><i style="background:var(--tertiary)"></i>GPU</small><strong class=num>730</strong><span class=tag>MHz</span><svg width="250" height="56" viewBox="0 0 250 56"><path d="M0,6 L18,6 L36,6 L54,5 L71,5 L89,5 L107,5 L125,5 L143,5 L161,5 L179,5 L196,5 L214,5 L232,5 L250,5" fill="none" stroke="#e2bada" stroke-width="4" stroke-linejoin="round"/></svg></div>
+ </div>
+</div>
+<div class=preset>
+ <div class=t><b>Balanced</b><span>Everyday default, GPU at full speed</span></div>
+ <div class=rail><div class=f></div><div class=d style="left:calc(0% - 8px)"></div><div class=d style="left:calc(25% - 8px)"></div><div class=d style="left:calc(50% - 8px)"></div><div class=d style="left:calc(75% - 8px)"></div><div class=d style="left:calc(100% - 8px)"></div><div class=th></div></div>
+ <div class=lab><span>Battery</span><span class=s>Balanced</span><span>Smooth</span><span>Performance</span><span>Extreme</span></div>
+</div>
+<div class=chips><span class="chip on">Overclock · GPU 730</span><span class=chip>Thermal limit off</span><span class="chip on">Touch boost</span><span class=chip>Animations 0.6×</span></div>
+<div class=prof><div><b>Profile “oc” has changes</b><span>GPU clock, read-ahead</span></div><div class=btn>Save changes</div></div>
+<div class=nav><div class=on><div class=pill>◉</div>Now</div><div><div class=pill>⚙</div>Tune</div><div><div class=pill>◐</div>Screen</div><div><div class=pill>▦</div>Apps</div><div><div class=pill>⋯</div>System</div></div>
