@@ -6,6 +6,10 @@ Settings opens in under a second once the apps are compiled. Cellular, USB mode 
 
 This repository holds the patches, helper tools and notes, and `build/build_image17.py` rebuilds the whole system image from public inputs (see "Build the image yourself").
 
+## Other devices
+
+The images are for the TB-X606V only. The patches target this tablet's MT8768 chip, its Android 10 vendor image and kernel 4.9.190, and the flashing steps assume a single 3.8 GB `system` partition. Flashing one on another model (for example the Tab P11, which has a different chip and a newer kernel) will most likely not boot. The Tab P11 is untested: a port would start from an unmodified Android 17 GSI on that tablet, and needs someone who has one.
+
 Companion repositories:
 - [`tb-x606v-kernel`](https://github.com/manvindar/tb-x606v-kernel): the 4.9 kernel patches and CI build. The final setup does not use it (see below).
 - [`tb-x606v-android16-port`](https://github.com/manvindar/tb-x606v-android16-port): the Android 16 build for this tablet, the known good fallback. It uses the same Gemini boot animation by default.
