@@ -195,6 +195,7 @@ for path, f in (('/system/lib64/bootstrap/libc.so', libc64), ('/system/lib/boots
                 ('/system/lib64/libprocessgroup_setup.so', patched('libc/patch_pgsetup.py', '/system/lib64/libprocessgroup_setup.so', 'pgsetup')),
                 ('/system/lib64/libmeminfo.so', patched('libc/patch_libmeminfo.py', '/system/lib64/libmeminfo.so', 'meminfo')),
                 ('/system/lib64/libbinder.so', patched('libc/patch_libbinder.py', '/system/lib64/libbinder.so', 'binder')),
+                ('/system/bin/netd', patched('libc/patch_netd_spawn.py', '/system/bin/netd', 'netd_spawn')),
                 ('/system/lib64/libandroid_runtime.so', patched('libc/patch_libandroid_runtime.py', '/system/lib64/libandroid_runtime.so', 'androidrt')),
                 ('/system/framework/services.jar', services_loc)):
     replace(S, path, f)
