@@ -66,7 +66,4 @@ for fid, label, b, bm, h, hm in FONTS:
 # the daemon enables this one and sets its priority to highest (it has to be above the dynamic palette overlay)
 build('BlackTheme', 'org.lineageos.overlay.customization.blacktheme', 'android.theme.customization.system_palette', 'Pure black',
       ''.join(f'    <color name="{k}">{v}</color>\n' for k, v in BLACK.items()))
-# lets the screen saver (Hub mode) start on battery too; Android only allows it while charging unless this is true
-build('HubOnBattery', 'org.tablet.overlay.hubonbattery', 'org.tablet.hubonbattery', 'Hub mode on battery',
-      '    <bool name="config_dreamsEnabledOnBattery">true</bool>\n')
 print(sorted(f for f in os.listdir(out) if f.endswith('.apk')))
