@@ -64,7 +64,7 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 |---|---|
 | ![Home](docs/screenshots/home.png) | ![Bluetooth](docs/screenshots/bluetooth.png) |
 
-## Status (2026-11-01)
+## Status (2026-11-02)
 
 | Area | State |
 |---|---|
@@ -79,7 +79,10 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 | Battery (level, voltage, temperature, health) | works, through an AIDL health shim (`tools/health`, see "Battery" in `docs/ANALYSIS.md`). Without it Android shows 100 percent, 0 V and -99 degrees (the vendor health service reads an unfitted gauge chip and the kernel's capacity is stale). Checked while charging; behaviour after unplugging not checked |
 | Keyboard (AOSP LatinIME) | works |
 | Settings two-pane layout, Pixel apps, Hub mode app, theme packs, Dolby Atmos | in the Pixel edition (see below); Hub mode and Device Health Services are not confirmed working, Theme packs show "coming soon" because Google's server returns no packs for this device |
-| ROM Tuner | presets, per app compile with live progress, tweak options, GPU overclock page (the CPU cannot be overclocked), picture controls, profiles, two-pane landscape layout (`rom-tuner` in the Android 16 port repo) |
+| ROM Tuner | home screen with a live graph and six mode cards, saved profiles, per app compile with live progress, GPU overclock page (the CPU cannot be overclocked), picture controls with a preview, fonts, pure black, display sizes, a rail layout in both orientations, and a CarPlay boost (`rom-tuner/` here; the Android 16 port repo is where it started) |
+| Hotspot | works with the netd patch (see "Hotspot" below) |
+| Microphone | works for apps, calls and recording; the voice recognition source needs 16 kHz (see "Known issues") |
+| Magisk | 31.1 installed in the boot partition on the test tablet; optional, not part of the image |
 | Ubuntu 22.04 | runs in a chroot on Android's kernel, command line only (`docs/LINUX.md`) |
 | Low memory killer | works, through a small replacement `lmkd` (`tools/lmkd`) |
 | Bluetooth | works: turns on, scans, pairs, and connects (HFP and A2DP with a Bose QC 45; the A2DP stream starts and stops with playback) |
@@ -103,6 +106,7 @@ First boot is slow until the apps are compiled. The GSI ships no odex, so every 
 
 From a read of the logs after a clean boot (no crashes, ANRs or service restarts):
 
+- **Voice recognition microphone at 48 kHz.** A test app recorded for 3 to 5 seconds from each source. The normal microphone, the camcorder source and the voice communication source gave real signal. The voice recognition source at 48 kHz returned clipped, full scale samples and only half the expected sample count; at 16 kHz it recorded normally. Apps that open it at 48 kHz (Siri through a CarPlay receiver, Assistant, Gboard voice typing) may get noise. Cause not found.
 - **Cellular.** The phone process reports "out of service" with an unknown radio HAL version, and Settings throws `UnsupportedOperationException` for the IMEI. The vendor radio (`mtkfusionrild`)
   only serves `android.hardware.radio@1.0/1.1` and `radio.config@1.0/1.1`, which Android 17's telephony does not accept (it wants a much newer HIDL version or AIDL). Making it work would need
   a radio HAL translation layer; not attempted. Needs a SIM to confirm.
@@ -116,6 +120,12 @@ From a read of the logs after a clean boot (no crashes, ANRs or service restarts
 - `dumpsys bluetooth_manager` crashes the Bluetooth process (`ControllerImpl::Dump`); debug only.
 - **Cast.** Play services' Cast module loads, discovery starts and multicast DNS works both ways, but no device was found on the test network and Play services logs many `Error while decoding multicast packet` lines. Untested against a real Chromecast or Cast TV.
 - **A2DP input.** The legacy `a2dp` module used for A2DP input (acting as a sink) does not exist in the 5.0 HAL ("could not load HW module a2dp"). A2DP output to headphones works.
+
+## Hotspot
+
+Turning the hotspot on used to switch it off a second later. Android 17's `netd` starts dnsmasq with `posix_spawn` and the flags `POSIX_SPAWN_USEVFORK | POSIX_SPAWN_CLOEXEC_DEFAULT` (0x140). With that flag bionic's child process calls `close_range(3, ~0, CLOSE_RANGE_CLOEXEC)`, which kernel 4.9 does not have. The call returns ENOSYS, the child exits with status 127 before it runs dnsmasq, `tetherDnsSet` fails with error 121 and Tethering shuts the hotspot down. A trace of the child (a small ptrace tool that follows the vfork) showed the `close_range` call and then `exit_group(127)`.
+
+`tools/libc/patch_netd_spawn.py` changes `mov w1, #0x140` to `mov w1, #0x40` before the call to `posix_spawnattr_setflags`, and `build/build_image17.py` applies it to `/system/bin/netd`. netd's own file descriptors are already close-on-exec, so nothing leaks into dnsmasq. After a live patch, restart netd with `setprop ctl.restart netd`, then turn Wi-Fi off and on: it has no route until you do. Other Android 17 binaries that spawn with that flag would need the same change.
 
 ## Boot animation
 
@@ -258,7 +268,7 @@ Pixel Settings only shows its two-pane layout when `persist.settings.large_scree
 
 **Prebuilt images.** `v17-dp11-261016-pixel-r4` is the newest Pixel image (built with `--dev-tools`; it has everything in this README, but it has not been booted yet). It adds the new ROM Tuner home screen, working fonts, pure black and swipe gestures, and the app speed fixes. `v17-dp11-261016-pixel-r3` has the battery, picture and profile changes, `v17-dp11-261016-pixel-r2` has the first set of fixes and `v17-dp11-261016-pixel-r1` is the image that was booted and used for a day. They contain Google's Pixel Tablet apps and MindTheGapps under Google's terms and are published at my own decision as a convenience; they can be removed. Install like the other releases (`tools/scripts/install_a17.sh`, branch `exp/pixel-tablet`).
 
-**After r4 (in the source, not in a prebuilt image).** The hotspot now stays on: Android 17's netd starts dnsmasq with a posix_spawn flag that makes bionic call `close_range`, which kernel 4.9 does not have, so the child exited before it ran. `tools/libc/patch_netd_spawn.py` clears the flag and `build_image17.py` applies it to `/system/bin/netd`. `rom-tuner/` is the current ROM Tuner: the Overview home with the live graph and mode cards, the rail layout in both orientations, the picture preview and Brightness slider, fonts and pure black overlays, display sizes, text weight and contrast, the fixed app speed list, and "Boost while CarPlay is open". Its tests are in `rom-tuner/tests/` and its notes in `rom-tuner/docs/` and `rom-tuner/README.md`.
+**After r4 (in the source, not in a prebuilt image).** The hotspot fix above, and the current ROM Tuner in `rom-tuner/` (tests in `rom-tuner/tests/`, notes in `rom-tuner/docs/` and `rom-tuner/README.md`).
 
 What the layer needed beyond booting (details in `docs/PIXEL.md`):
 - **Setup wizard.** The GSI ships AOSP `Provision` as a second `SETUP_WIZARD` activity. With two, PackageManager names no setup wizard and the `signature|setup` permission `NETWORK_SETUP_WIZARD` is never granted, so the Google wizard crashed on its Wi-Fi page. The builder deletes `Provision.apk` (disabling it with `pm` is not enough, the check ignores the disabled state). "Not now" on the screen lock page used to return to date and time forever; `tools/pixel/wizard_lock_skip.sh` notices that and finishes setup. The wizard works offline ("Set up offline"), ending on the Pixel launcher.
