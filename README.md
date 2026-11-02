@@ -8,6 +8,10 @@ This repository holds the patches, helper tools and notes, and `build/build_imag
 
 A Pixel Tablet look (Pixel SystemUI, Settings, launcher and apps) is a separate layer on branch `exp/pixel-tablet`. It uses Google's Pixel Tablet factory image as input, so no Pixel binaries are published: you build that layer yourself (see `docs/PIXEL.md` there).
 
+## Other devices
+
+The images are for the TB-X606V only. The patches target this tablet's MT8768 chip, its Android 10 vendor image and kernel 4.9.190, and the flashing steps assume a single 3.8 GB `system` partition. Flashing one on another model (for example the Tab P11, which has a different chip and a newer kernel) will most likely not boot. The Tab P11 is untested: a port would start from an unmodified Android 17 GSI on that tablet, and needs someone who has one.
+
 Companion repositories:
 - [`tb-x606v-kernel`](https://github.com/manvindar/tb-x606v-kernel): the 4.9 kernel patches and CI build. The final setup does not use it (see below).
 - [`tb-x606v-android16-port`](https://github.com/manvindar/tb-x606v-android16-port): the Android 16 build for this tablet, the known good fallback. It uses the same Gemini boot animation by default.
