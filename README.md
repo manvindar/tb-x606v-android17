@@ -56,13 +56,21 @@ seccomp policy additions, the MP2 audio decoder and software VP9 decoder removed
 
 ## Screenshots
 
-| Settings | Quick settings | About phone |
-|---|---|---|
-| ![Settings](docs/screenshots/settings.png) | ![Quick settings](docs/screenshots/quick-settings.png) | ![About phone](docs/screenshots/about.png) |
+Taken on the tablet on 2026-11-02 (Pixel edition, landscape). The Wi-Fi name and the weather location are blurred.
 
-| Home | Bluetooth (Bose QC 45 connected) |
+| Home | Quick settings |
 |---|---|
-| ![Home](docs/screenshots/home.png) | ![Bluetooth](docs/screenshots/bluetooth.png) |
+| ![Home](docs/screenshots/os-home.jpg) | ![Quick settings](docs/screenshots/os-quick-settings.png) |
+
+| Display & touch | Connected devices |
+|---|---|
+| ![Display and touch](docs/screenshots/os-display.png) | ![Connected devices](docs/screenshots/os-connected-devices.png) |
+
+ROM Tuner (landscape rail layout, and portrait):
+
+| Overview | Look | Display and touch | Overview, portrait |
+|---|---|---|---|
+| ![Overview](docs/screenshots/a17-land-tuner-home.png) | ![Look](docs/screenshots/a17-land-tuner-look.png) | ![Display](docs/screenshots/a17-land-tuner-display.png) | ![Overview in portrait](docs/screenshots/a17-port-tuner-home.png) |
 
 ## Status (2026-11-02)
 
