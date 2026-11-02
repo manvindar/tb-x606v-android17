@@ -332,6 +332,9 @@ if not a.no_tuner:
     gem = os.path.join(R, 'boot-animation', 'bootanimation-gemini.zip')
     put(os.path.join(R, 'boot-animation', 'bootanimation-arrow.zip'), media + '/bootanimation-arrow.zip', '644'); put(gem, media + '/bootanimation-gemini.zip', '644')
     put(gem, media + '/bootanimation.zip', '644')                    # Gemini is the default, the Tuner copies the chosen one over this file
+    ov = os.path.join(R, 'overlays')                                 # font overlays and the pure black overlay (signed with the AOSP platform test key, like the rest)
+    for f in sorted(os.listdir(ov)) if os.path.isdir(ov) else []:
+        if f.endswith('.apk'): mkdir('/system/product/overlay/' + f[:-4]); put(os.path.join(ov, f), '/system/product/overlay/%s/%s' % (f[:-4], f), '644')
 if a.dev_tools:
     for f, mode in (('boot_watchdog.sh', '755'), ('bootdiag.sh', '755')): put(os.path.join(TOOLS, 'debug', f), '/system/bin/' + f, mode)
     for f in ('zz_boot_watchdog.rc', 'zz_bootdiag.rc'): put(os.path.join(TOOLS, 'debug', f), '/system/etc/init/' + f, '644')
