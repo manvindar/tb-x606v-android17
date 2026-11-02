@@ -6,7 +6,7 @@ F=${DEXOPT_FORCE--f}
 # (checked: the process maps the dalvik-cache vdex, not the speed odex). Deleting the stale copy makes the next process start use the odex.
 fixcache() {
   pm list packages -f | sed 's/^package://; s/=[^=]*$//' | while read apk; do
-    case $apk in /system/*|/product/*|/system_ext/*|/vendor/*) ;; *) continue;; esac
+    case $apk in /system/*|/product/*|/system_ext/*) ;; *) continue;; esac   # not /vendor: its Android 10 odex is rejected by this ART, so the dalvik-cache copy made by a compile is the one in use
     d=${apk%/*}; b=${apk##*/}; b=${b%.apk}
     [ -f "$d/oat/arm64/$b.odex" ] || continue
     rm -f /data/dalvik-cache/arm64/$(echo "${apk#/}" | sed 's|/|@|g')@classes.*
