@@ -29,6 +29,13 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+        <activity android:name=".HubPrefsActivity" android:exported="true" android:label="Screen saver" android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true" android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <activity android:name=".HubActivity" android:exported="false" android:label="Fridge hub" android:launchMode="singleTask"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" android:excludeFromRecents="true" />
         <service android:name=".HubDream" android:exported="true" android:label="Fridge hub" android:icon="@drawable/ic_hub"
