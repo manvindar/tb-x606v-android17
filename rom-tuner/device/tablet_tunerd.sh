@@ -385,7 +385,7 @@ valid() {   # $1 key, $2 value
     watermark) oneof "$2" 10 20 30;;
     cached_apps) oneof "$2" default 16 24 32 48;;
     compile_pkg|compile_pkg_profile|reset_pkg) pkgok "$2";;
-    refresh_apps|preview_photo) oneof "$2" 1;;
+    refresh_apps|preview_photo|hub_mode) oneof "$2" 1;;
     oc_master) oneof "$2" 0 1;;
     pq_mode) oneof "$2" 0 2;;
     pq_contrast|pq_sat) oneof "$2" 0 1 2 3 4 5 6 7 8 9;;
@@ -519,7 +519,7 @@ handle() {
     case $v in ''|*[!A-Za-z0-9._-]*) log "reject $k"; continue;; esac
     valid "$k" "$v" || { log "reject $k=$v"; continue; }
     log "req $k=$v"
-    case $k in preset|restart_ui|reboot|compile_now|compile_all|compile_pkg|compile_pkg_profile|reset_pkg|refresh_apps|preview_photo|night|black_theme|phh_effects|nav_mode|anim_scale|density|bootanim|logging|palette_source|accent|theme_style|font|icon_shape|icon_pack|screen_timeout|font_scale|font_weight|text_contrast|carplay_boost|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|cached_apps|wifi_country|adb_tcp|bt_work|serial_console|pq_mode|pq_contrast|pq_sat|pq_gamma|pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_bri|pq_color|save_profile|update_profile|apply_profile|delete_profile|profile_active|profile_base|oc_master|oc_cpu_uv|oc_gpu|oc_profile|oc_stock) ;; *) putkey preset custom; putkey profile_active "";; esac
+    case $k in preset|restart_ui|reboot|compile_now|compile_all|compile_pkg|compile_pkg_profile|reset_pkg|refresh_apps|preview_photo|hub_mode|night|black_theme|phh_effects|nav_mode|anim_scale|density|bootanim|logging|palette_source|accent|theme_style|font|icon_shape|icon_pack|screen_timeout|font_scale|font_weight|text_contrast|carplay_boost|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|cached_apps|wifi_country|adb_tcp|bt_work|serial_console|pq_mode|pq_contrast|pq_sat|pq_gamma|pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_bri|pq_color|save_profile|update_profile|apply_profile|delete_profile|profile_active|profile_base|oc_master|oc_cpu_uv|oc_gpu|oc_profile|oc_stock) ;; *) putkey preset custom; putkey profile_active "";; esac
     case $k in
       perf_profile|gpu_lock|gpu_freq|oc|fg_boost|cap_big|cap_little) P=1; U=1; putkey $k $v;;
       palette_source|accent|theme_style|font|icon_shape|icon_pack) T=1; putkey $k $v;;
@@ -543,6 +543,8 @@ handle() {
       compile_pkg_profile) pkg_enqueue speed-profile "$v"; continue;;
       reset_pkg) pkg_enqueue reset "$v"; continue;;
       refresh_apps) apps_refresh_bg; continue;;
+      hub_mode) service call dreams 1 >/dev/null 2>&1; continue;;   # DreamManager.dream(): the screen saver (Hub mode) starts now
+
       preview_photo) preview_photo; continue;;   # the app cannot read the wallpaper itself
       *) log "unknown $k"; continue;;
     esac
