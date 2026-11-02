@@ -12,7 +12,7 @@ It needs a rebuilt copy because this GSI is newer than the APK's framework (`too
 6. `patch_desktop_mode.py`: never keep the shell's `IDesktopMode` binder (`setTaskbarIconPositionLocator` was rejected by this SystemUI)
 7. eight more privileged permissions go into `privapp-permissions-nexuslauncher-a17.xml`. Without that file system_server aborts at boot and the tablet sits on the boot animation.
 
-Not working: gesture navigation and the Pixel recents screen. The NikGapps recents overlay (`PixelLauncherOverlay.apk`) makes the Pixel Launcher the recents component.
+Not working: the Pixel recents screen. Gesture navigation was reported as crashing when forced at boot (TitanConfigOverlay); switched on afterwards from ROM Tuner (Display and touch, Navigation) it works: the swipe up from the bottom edge reaches the launcher. Tested briefly only, so switch back to three buttons if the system misbehaves. The NikGapps recents overlay (`PixelLauncherOverlay.apk`) makes the Pixel Launcher the recents component.
 With it the launcher starts, but the first app launch crashes SystemUI's shell (`RecentsTransitionHandler`: `detachNavigationBarFromApp` gets a null `IRemoteCallback`),
 because the launcher's recents/transition calls into the shell no longer match this SystemUI build. `tools/pixel/compare_aidl.py` compares AIDL codes and signatures between the two apps (SystemUI's R8-merged stubs defeat it for ISystemUiProxy).
 Expect more mismatches behind that one; each one crashes SystemUI, so it was not pursued. The overlay is therefore not installed.
@@ -42,7 +42,7 @@ Boot hang rule: `/vendor/build.prop` has `ro.control_privapp_permissions=enforce
 (`Signature|privileged permissions not in privileged permission allowlist`), and the tablet stays on the boot animation. adb never comes up. Recovery: TWRP, delete the app, reboot. The failed boot's logcat is in `/data/local/tmp/bootdiag/` when the boot diagnostics service is on.
 An app can register under its `original-package` name (Google Clock: `com.android.deskclock`), so the allowlist needs every candidate name.
 
-Not persistent: Gboard (draws no keyboard), gesture navigation (see above), At a Glance, Pixel Weather and the Pixel clock widget (no smartspace service on the GSI), network location (see the README, the Play services APK does not request `INSTALL_LOCATION_PROVIDER`).
+Not persistent: Gboard (draws no keyboard), At a Glance, Pixel Weather and the Pixel clock widget (no smartspace service on the GSI), network location (see the README, the Play services APK does not request `INSTALL_LOCATION_PROVIDER`).
 
 ## Performance
 Two things made the Pixel Launcher sluggish on the GE8320 (measured with `dumpsys gfxinfo`, 8 drawer open/close cycles):
