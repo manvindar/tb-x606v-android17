@@ -129,6 +129,10 @@ From a read of the logs after a clean boot (no crashes, ANRs or service restarts
 - **Cast.** Play services' Cast module loads, discovery starts and multicast DNS works both ways, but no device was found on the test network and Play services logs many `Error while decoding multicast packet` lines. Untested against a real Chromecast or Cast TV.
 - **A2DP input.** The legacy `a2dp` module used for A2DP input (acting as a sink) does not exist in the 5.0 HAL ("could not load HW module a2dp"). A2DP output to headphones works.
 
+## WebView Beta as the system WebView
+
+The ROM only accepts `com.android.webview` as a WebView provider (`config_webview_packages.xml` in `framework-res.apk`), so Chrome's WebView Beta installs but cannot be selected. `tools/framework/allow_webview_beta.py` rebuilds `framework-res.apk` with Beta added and the signing certificate of the Beta APK in `<signature>`; write the result from TWRP (`cat new > /system/framework/framework-res.apk`), then `cmd webviewupdate set-webview-implementation com.google.android.webview.beta`. A runtime overlay for this froze system_server (ANR) and is not used. Two mistakes cost a recovery each: the first build put both certificates of the Chrome signing lineage into `<signature>` (`bad base-64` in `WebViewProviderInfo`, system_server dies at boot, the tablet ends in TWRP; the boot log is in `/data/local/tmp/bootdiag/logcat.txt`, readable from TWRP), so only the first certificate must be used.
+
 ## Hotspot
 
 Turning the hotspot on used to switch it off a second later. Android 17's `netd` starts dnsmasq with `posix_spawn` and the flags `POSIX_SPAWN_USEVFORK | POSIX_SPAWN_CLOEXEC_DEFAULT` (0x140). With that flag bionic's child process calls `close_range(3, ~0, CLOSE_RANGE_CLOEXEC)`, which kernel 4.9 does not have. The call returns ENOSYS, the child exits with status 127 before it runs dnsmasq, `tetherDnsSet` fails with error 121 and Tethering shuts the hotspot down. A trace of the child (a small ptrace tool that follows the vfork) showed the `close_range` call and then `exit_group(127)`.
