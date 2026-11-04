@@ -99,7 +99,7 @@ ROM Tuner (landscape rail layout, and portrait):
 | YouTube playback | works with sound, 720p and up (hardware H.264; the vendor VP9 entry is removed); needed the `libui` usage-bit patch |
 | Chrome and WebView apps that use a sandboxed renderer | works (needed the `clone3` and capability fixes in `tools/libc/patch_libc.py`, see "Chrome shows no pages") |
 | Boot animation | Pixel 10 Gemini animation fitted to the panel (`tools/boot-animation`); see below |
-| Cellular (calls, SMS, mobile data) | not working, see below |
+| Cellular (calls, SMS, mobile data) | radio and IMEI work, SIM untested, see below |
 | USB file transfer | works (checked with libmtp); tethering untested |
 | DRM (Widevine) | Netflix plays (secure video layer, audio output); Widevine level and maximum resolution not measured |
 
@@ -115,7 +115,7 @@ First boot is slow until the apps are compiled. The GSI ships no odex, so every 
 From a read of the logs after a clean boot (no crashes, ANRs or service restarts):
 
 - **Voice recognition microphone at 48 kHz.** A test app recorded for 3 to 5 seconds from each source. The normal microphone, the camcorder source and the voice communication source gave real signal. The voice recognition source at 48 kHz returned clipped, full scale samples and only half the expected sample count; at 16 kHz it recorded normally. Apps that open it at 48 kHz (Siri through a CarPlay receiver, Assistant, Gboard voice typing) may get noise. Cause not found.
-- **Cellular.** The phone process reports "out of service" with an unknown radio HAL version, and Settings throws `UnsupportedOperationException` for the IMEI. The vendor radio (`mtkfusionrild`)
+- **Cellular.** Fixed after r5 (in the image from r6, or install the Magisk module `tools/magisk/telephony-features` on r5): the Android 10 vendor does not declare `android.hardware.telephony.radio.access`, so Android 17 treated every radio service as unavailable. With the features declared, the phone process binds the vendor HIDL radio 1.4, powers the modem on and reads the IMEI. Tested without a SIM (state ABSENT): calls, SMS and mobile data with a SIM are untested, and IMS (VoLTE, Wi-Fi calling) has no Android 17 service.
   only serves `android.hardware.radio@1.0/1.1` and `radio.config@1.0/1.1`, which Android 17's telephony does not accept (it wants a much newer HIDL version or AIDL). Making it work would need
   a radio HAL translation layer; not attempted. Needs a SIM to confirm.
 - **USB.** `UsbDeviceManager` logs "usb gadget hidl hal service not found" (the vendor only has `android.hardware.usb@1.1`, port roles) and falls back to its legacy handler, which drives `sys.usb.config`.
