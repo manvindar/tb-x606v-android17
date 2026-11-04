@@ -37,6 +37,7 @@ ap.add_argument('--dolby', help='directory with DaxUI.apk, daxService.patched.ap
 ap.add_argument('--pixel', help='NikGapps-full-arm64-16-*.zip: source of the Pixel apps (Android 16 build; the launcher itself comes from --pixel-launcher-apk)')
 ap.add_argument('--pixel-tablet', help='directory made by tools/pixel/stage_pixel_tablet.py: Pixel Tablet SystemUI, Settings and launcher + config overlays of the matching Android 17 build (replaces the GSI SystemUI and Settings)')
 ap.add_argument('--pixel-launcher-apk', help='Pixel Launcher built by tools/pixel/build_pixel_launcher.sh')
+ap.add_argument('--platform-keys', help='directory with platform.pk8 and platform.x509.pem (the public AOSP platform test key): with it framework-res.apk also accepts Chrome WebView Beta as a WebView provider (tools/framework/allow_webview_beta.py)')
 ap.add_argument('--e2fs', help='directory with debugfs, e2fsck, resize2fs, mke2fs (default: found on PATH, /sbin, Homebrew)')
 ap.add_argument('--build-tools', help='Android SDK build-tools directory (zipalign, apksigner, d8); default $ANDROID_HOME/build-tools/<newest>')
 ap.add_argument('--workdir'); ap.add_argument('--keep-work', action='store_true')
@@ -199,6 +200,12 @@ for path, f in (('/system/lib64/bootstrap/libc.so', libc64), ('/system/lib/boots
                 ('/system/lib64/libandroid_runtime.so', patched('libc/patch_libandroid_runtime.py', '/system/lib64/libandroid_runtime.so', 'androidrt')),
                 ('/system/framework/services.jar', services_loc)):
     replace(S, path, f)
+if a.platform_keys:
+    print('3b framework-res.apk: Chrome WebView Beta accepted as a WebView provider')
+    jar = os.path.join(os.path.dirname(os.path.dirname(BT)), 'platforms', 'android-34', 'android.jar')
+    py('framework/allow_webview_beta.py', tmpf('framework-res.orig', cat(S, '/system/framework/framework-res.apk')), os.path.join(TOOLS, 'framework', 'chrome_webview_cert.b64'),
+       os.path.join(a.platform_keys, 'platform.pk8'), os.path.join(a.platform_keys, 'platform.x509.pem'), wp('framework-res.wv.apk'), env=dict(os.environ, BUILD_TOOLS=BT, ANDROID_JAR=jar))
+    replace(S, '/system/framework/framework-res.apk', wp('framework-res.wv.apk'))
 # the runtime APEX carries its own copies of libc and the linkers (apps and the bionic namespace use them)
 open(wp('rt.apex'), 'wb').write(cat(S, '/system/apex/com.android.runtime.apex'))
 repl = []

@@ -5,12 +5,18 @@ A provider that is not a system app needs the base64 of its signing certificate 
 a Chrome APK is signed with a lineage of two, and putting both into <signature> gives "bad base-64" in WebViewProviderInfo, which kills system_server at boot.
 The result is signed with the platform test key (same certificate as the original) and has to be written from TWRP into /system/framework/framework-res.apk
 with `cat new > file` (the partition is full, and a running system keeps the old file mapped).
-usage: allow_webview_beta.py framework-res.apk beta-base.apk platform.pk8 platform.x509.pem out.apk   (build-tools 35 on PATH or in ~/Library/Android/sdk)"""
+The second argument is either the Beta APK (the certificate is read from it) or a file with that base64 certificate (`chrome_webview_cert.b64` next to this script holds the public Chrome signing certificate).
+usage: allow_webview_beta.py framework-res.apk beta-base.apk|chrome_webview_cert.b64 platform.pk8 platform.x509.pem out.apk   (build-tools 35 on PATH or in ~/Library/Android/sdk)"""
 import base64, os, re, subprocess, sys, tempfile, zipfile
 fr, beta, key, crt, out = sys.argv[1:6]
-BT = os.path.expanduser('~/Library/Android/sdk/build-tools/35.0.0'); PL = os.path.expanduser('~/Library/Android/sdk/platforms/android-34/android.jar')
-pem = subprocess.run([BT + '/apksigner', 'verify', '--print-certs-pem', beta], capture_output=True, text=True).stdout
-cert = ''.join(re.findall(r'-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----', pem, re.S)[0].split()); base64.b64decode(cert, validate=True)
+BT = os.environ.get('BUILD_TOOLS') or os.path.expanduser('~/Library/Android/sdk/build-tools/35.0.0')
+PL = os.environ.get('ANDROID_JAR') or os.path.expanduser('~/Library/Android/sdk/platforms/android-34/android.jar')
+if beta.endswith('.apk'):
+    pem = subprocess.run([BT + '/apksigner', 'verify', '--print-certs-pem', beta], capture_output=True, text=True).stdout
+    cert = ''.join(re.findall(r'-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----', pem, re.S)[0].split())
+else:
+    cert = ''.join(open(beta).read().split())
+base64.b64decode(cert, validate=True)
 xml = f'''<?xml version="1.0" encoding="utf-8"?>
 <webviewproviders>
     <webviewprovider description="Android WebView" packageName="com.android.webview" availableByDefault="true" />
