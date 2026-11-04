@@ -328,6 +328,9 @@ rc = cat(S, '/system/etc/init/hw/init.rc').decode(); old = 'on init && property:
 replace(S, '/system/etc/init/hw/init.rc', tmpf('init.rc', rc.replace(old, '# console shell on the UART only when asked (ROM Tuner: Serial console). ActivityManager shows a performance warning whenever init.svc.console is running.\n'
                                                              'on property:persist.sys.console=1\n    start console\n')))
 
+# 8c telephony sub-features the Android 10 vendor does not declare (RIL.mIsCellularSupported needs radio.access, else every radio service is 'not available')
+put(os.path.join(TOOLS, 'telephony', 'android.hardware.telephony.a17.xml'), '/system/etc/permissions/android.hardware.telephony.a17.xml', '644')
+
 # 9 ROM Tuner, boot animations, optional boot diagnostics ---------------------------------------------------------------------
 R = os.path.join(a.port_repo, 'rom-tuner'); media = '/system/product/media'
 def rc_fix(path): return open(path).read().replace('u:r:su:s0', 'u:r:init:s0')      # the 'su' domain is not in this policy
