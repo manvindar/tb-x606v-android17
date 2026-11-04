@@ -233,7 +233,7 @@ jobs:
           path: port
       - name: Free disk space
         run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
           df -h /
       - uses: actions/setup-python@v7
         with: { python-version: '3.12' }
