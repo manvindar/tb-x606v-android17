@@ -1506,8 +1506,8 @@ public class MainActivity extends Activity {
         rowChoice(c, "CPU voltage trim", "Lowers the CPU voltage at every step, 6 mV per notch. Less heat at the same speed. Too low freezes the tablet.", "oc_cpu_uv",
             new String[]{"Stock", "-6 mV", "-12 mV", "-25 mV"}, new String[]{"0", "1", "2", "4"}, "0");
         c = group("GPU");
-        rowChoice(c, "GPU overclock", "Raises the GPU above its 680 MHz top step at the same 0.80 V. Replaces the GPU clock setting while it is on.", "oc_gpu",
-            new String[]{"Stock (680 MHz)", "730 MHz (Max stable)", "760 MHz", "800 MHz"}, new String[]{"0", "730000", "760000", "800000"}, "0");
+        rowChoice(c, "GPU overclock", "Raises the GPU above its 680 MHz top step at the same 0.80 V. Replaces the GPU clock setting while it is on. Above 800 MHz it gains little (about 8 percent more speed at 920) and the chip has a limit: on this tablet 920 MHz held and 960 MHz crashed it. 940 is untested. After a crash the overclock switches itself off.", "oc_gpu",
+            new String[]{"Stock (680 MHz)", "730 MHz (Max stable)", "760 MHz", "800 MHz", "840 MHz", "880 MHz", "920 MHz (limit of the test)", "940 MHz (untested)"}, new String[]{"0", "730000", "760000", "800000", "840000", "880000", "920000", "940000"}, "0");
         c = group(null);
         rowAction(c, "Back to stock", "Turns off everything on this page right away, including Maximum clocks.", () -> { set("oc_stock", "1"); build(); });
     }

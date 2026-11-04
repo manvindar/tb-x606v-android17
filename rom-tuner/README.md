@@ -158,7 +158,7 @@ Risks. A hard hang or a PMIC fault does not shut the tablet down cleanly: the Me
 |---|---|---|---|
 | `oc_master` | 0, 1 | 0 | Allows the two settings below |
 | `oc_cpu_uv` | 0, 1, 2, 4 | 0 | Writes `-N` to the `eem_offset` of the four CPU banks: 0, -6.25, -12.5, -25 mV on every step |
-| `oc_gpu` | 0, 730000, 760000, 800000 | 0 | `gpufreq_opp_freq 680000` (keeps the Vcore request at step 0), then `gpufreq_fixed_freq_volt "<kHz> 80000"`. Only when the first OPP line of `gpufreq_opp_dump` is 680000 at 80000, otherwise status `unsupported`. After a second the PLL is read back (`real freq` in `gpufreq_var_dump`); more than 2 percent off means `gpu_failed` and a revert |
+| `oc_gpu` | 0, 730000, 760000, 800000, 840000, 880000, 920000, 940000 | 0 | `gpufreq_opp_freq 680000` (keeps the Vcore request at step 0), then `gpufreq_fixed_freq_volt "<kHz> 80000"`. Only when the first OPP line of `gpufreq_opp_dump` is 680000 at 80000, otherwise status `unsupported`. After a second the PLL is read back (`real freq` in `gpufreq_var_dump`); more than 2 percent off means `gpu_failed` and a revert |
 | `oc_profile` | `maxstable` | one-shot | `oc_master=1`, `oc=1`, `oc_cpu_uv=0`, `oc_gpu=730000` |
 | `oc_stock` | `1` | one-shot | "Back to stock": master 0, `oc=0`, trim 0, GPU 0, offsets 0, `gpufreq_fixed_freq_volt "0 0"`, GPU clock setting restored |
 | `oc` | 0, 1 | 0 | The old key, shown as "Maximum clocks": pins both clusters at the top stock step with the performance governor. Not an overclock, not part of the crash guard |
@@ -183,7 +183,7 @@ Measured: the stock tables above, the live EEM voltages, the regulator ranges, t
 | Mild, "Max stable" | top clocks pinned (same clocks, no step down), no voltage change | 730 MHz at 0.80 V | GPU +7 percent clock, about 3 to 6 percent frames in GPU bound apps; CPU none beyond less ramp delay | GPU dynamic power about +7 percent (driver model, power is proportional to clock at fixed voltage), a few degrees; battery lower from the pinned CPU clocks | yes, `oc_profile=maxstable` |
 | Medium | pinned, trim -12 mV | 760 MHz at 0.80 V | GPU +12 percent clock | GPU power +12 percent; trim saves about 2 percent CPU dynamic power; trim can crash | yes, `oc_cpu_uv=2`, `oc_gpu=760000` |
 | Aggressive | pinned, trim -25 mV | 800 MHz at 0.80 V | GPU +18 percent clock | GPU power +18 percent; -25 mV is about -4.5 percent CPU dynamic power but is the likeliest to hang | yes, `oc_cpu_uv=4`, `oc_gpu=800000` |
-| Not offered | CPU above 2.30 and 1.80 GHz, CPU over voltage, GPU above 0.80 V, GPU above 800 MHz | | | | no interface (CPU), shared rail (GPU), one unit froze at 900 MHz elsewhere |
+| Not offered | CPU above 2.30 and 1.80 GHz, CPU over voltage, GPU above 0.80 V, GPU above 940 MHz | | | | no interface (CPU), shared rail (GPU), one unit froze at 900 MHz elsewhere; this tablet: 920 MHz held for about 90 s, 960 MHz was a kernel panic (November 4), 940 untested |
 
 800 MHz is 70 MHz below the 870 MHz that one A7 Lite reportedly held, and the 0.80 V is the same on both, but that is one unit of another model, so the aggressive step may fail on this tablet. Silicon differs from unit to unit. Test each step before trusting it.
 

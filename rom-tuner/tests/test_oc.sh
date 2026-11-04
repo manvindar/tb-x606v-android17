@@ -28,6 +28,8 @@ fresh() { printf 'oc_master=%s\noc_cpu_uv=%s\noc_gpu=%s\noc_status=off\ngpu_freq
 # validation: only the list reaches a node
 valid oc_gpu 730000 && a=y || a=n; ok "valid 730000" $a y
 valid oc_gpu 900000 && a=y || a=n; ok "reject 900000" $a n
+valid oc_gpu 940000 && a=y || a=n; ok "accept 940000" $a y
+valid oc_gpu 960000 && a=y || a=n; ok "reject 960000 (kernel panic on the tablet)" $a n
 valid oc_gpu 1 && a=y || a=n; ok "reject 1" $a n
 valid oc_cpu_uv 3 && a=y || a=n; ok "reject uv 3" $a n
 valid oc_cpu_uv 4 && a=y || a=n; ok "valid uv 4" $a y

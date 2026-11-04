@@ -400,7 +400,7 @@ valid() {   # $1 key, $2 value
     pq_hdr) oneof "$2" 0 1;;
     pq_color) oneof "$2" 0 1 2 3;;
     oc_cpu_uv) oneof "$2" 0 1 2 4;;
-    oc_gpu) oneof "$2" 0 730000 760000 800000;;
+    oc_gpu) oneof "$2" 0 730000 760000 800000 840000 880000 920000 940000;;
     oc_profile) oneof "$2" maxstable;;
     oc_stock) oneof "$2" 1;;
     *) return 0;;
