@@ -49,3 +49,13 @@ adb shell 'dumpsys package com.google.android.gms | grep -m1 "arm64: \\[status"'
 adb shell 'getprop persist.sysui.disableBlur; getprop dalvik.vm.usap_pool_enabled'     # 1 and true
 adb shell 'dumpsys gfxinfo com.android.launcher3 reset; ...swipe the drawer...; dumpsys gfxinfo com.android.launcher3 | grep -E "Janky|50th|99th"'
 ```
+
+## App drawer analysis (November 4, 2026, r5 plus live changes)
+Test: 6 drawer open/close swipes and 4 scroll flings on the Pixel Launcher (landscape), `dumpsys gfxinfo` and an `atrace` (gfx view input sched freq binder_driver ss) of 12 s, parsed per thread.
+- The CPUs and the GPU are already at their maximum (performance governor, 2.3 and 1.8 GHz, GPU 730 MHz). The launcher's RenderThread spends about 19 ms CPU per frame (libhwui 43%, the MediaTek GL driver 18%, kernel 9%); GPU time is only 6 to 9 ms per frame. The main thread is not starved (runnable wait 25 ms in 12 s).
+- 17% of the frames had a 20 to 40 ms stall in `flush commands` (the GL submit). 91% of those overlapped SurfaceFlinger drawing the wallpaper on the GPU (5% of the fast frames did): the wallpaper layer is rotated 90 degrees and scaled, which the Android 10 vendor HWC cannot compose, so it is a CLIENT layer, and the launcher zooms it on every drawer frame. `tools/magisk/wallpaper-nozoom` removes the zoom; the stall count dropped from 43 to 25 but the benchmark did not improve, because the remaining stalls come from SurfaceFlinger region sampling (a 292x4 sample for the gesture handle, about 5 screenshots per second, each drawing the wallpaper and the launcher on the GPU) and from HWC present.
+- Skia Vulkan (`debug.hwui.renderer=skiavk`) works on this driver but was not better (22 to 27% janky with GL, 50% with Vulkan in the first matched runs).
+- The `--dev-tools` boot logger (`bootdiag.sh`) ran `logcat -f` forever (about 4% of a core plus flash writes); it now stops 3 minutes after boot.
+- The Google app's "Hey Google & Voice Match" had "While driving" switched on: the on-device hotword process used 8 to 20% of a core and kept the microphone open. Off now (Google app, Hey Google & Voice Match).
+- Run to run noise is large (16 to 62% janky for the same build), so judge a change on at least 4 runs; a reboot also changes the ROM Tuner profile that is active.
+
