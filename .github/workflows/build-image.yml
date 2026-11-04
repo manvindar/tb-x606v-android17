@@ -92,7 +92,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y e2fsprogs erofs-utils p7zip-full xz-utils zip unzip openssl
-          pip install capstone
+          pip install capstone pyelftools lz4
           if [ "${{ inputs.mode }}" != "check" ]; then
             sdkmanager "build-tools;35.0.0" "platforms;android-34"
             zig version
@@ -246,7 +246,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y e2fsprogs erofs-utils p7zip-full xz-utils zip unzip openssl
-          pip install capstone
+          pip install capstone pyelftools lz4
           sdkmanager "build-tools;35.0.0" "platforms;android-34"
       - name: Google's Android 17 GSI
         run: |
