@@ -1,0 +1,5 @@
+out/
+gen/
+*.keystore
+*.idsig
+Godwit.apk
