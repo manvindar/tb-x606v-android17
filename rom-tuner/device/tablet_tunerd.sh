@@ -229,14 +229,14 @@ load() {
   [ -z "$gpu_freq" ] && gpu_freq=$([ "$gpu_lock" = 0 ] && echo 0 || echo 680000)
   : ${fg_boost:=auto} ${ta_boost:=0} ${big_rotation:=0} ${vfs_cache:=50} ${dirty:=1} ${extra_free:=49152} ${page_cluster:=0}
   : ${touch_duration_ms:=400} ${touch_opp:=0} ${touch_boost:=100} ${schedstats:=0} ${down_throttle:=20} ${up_throttle:=0} ${cap_margin:=1536} ${mcdi:=1} ${watermark:=10} ${wifi_country:=CA} ${cached_apps:=default}
-  : ${oc_master:=0} ${oc_cpu_uv:=0} ${oc_gpu:=0} ${oc_status:=off}
+  : ${oc_master:=0} ${oc_cpu_uv:=0} ${oc_gpu:=0} ${oc_cpu:=0} ${oc_status:=off}
   : ${phh_effects:=0} ${governor:=schedplus} ${oc:=0} ${thermal:=stock} ${io_sched:=deadline} ${readahead:=512} ${swappiness:=100} ${tcp_cc:=bic}
 }
 putkey() { grep -v "^$1=" $S > $S.t; echo "$1=$2" >> $S.t; mv $S.t $S; }
 publish() {   # copy state (+ a status line) to the app; the file is pre-created with the app's owner/context
   [ -f $APP/state ] || return
   gpu_eff=0; [ "$gpu_freq" != 0 ] && [ "$perf_profile" != battery ] && gpu_eff=1
-  { cat $S; echo "profiles=$(cut -d"|" -f1 $PF 2>/dev/null | tr "\n" ,)"; echo "govs=$(tr ' ' , < /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors)"; echo "gpu_opps=$(sed -n 's/.*freq = \([0-9]*\),.*/\1/p' /proc/gpufreq/gpufreq_opp_dump | tr '\n' ,)"; echo "io_scheds=$(tr -d '[]' < /sys/block/mmcblk0/queue/scheduler | tr ' ' ,)"; echo "tcps=$(tr ' ' , < /proc/sys/net/ipv4/tcp_available_congestion_control)"; echo "fonts=$(cmd overlay list --user 0 | grep -oE "[A-Za-z0-9_.]*\\.font\\.[a-z0-9]+\$" | sed "s/.*font\\.//" | sort -u | tr "\\n" ,)"; ovl "icon\\.squircle" && echo has_shapes=1 || echo has_shapes=0; ovl "icon_pack\\.rounded\\.android" && echo has_packs=1 || echo has_packs=0; pubcompile; pubapps; echo "pq_live=$(pq_live)"; echo "status=$perf_profile, GPU $([ "$gpu_eff" = 1 ] && echo locked $((gpu_freq/1000)) MHz || echo auto)"; } > $S.pub
+  { cat $S; echo "profiles=$(cut -d"|" -f1 $PF 2>/dev/null | tr "\n" ,)"; echo "govs=$(tr ' ' , < /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors)"; echo "cpu_top=$(cut -d" " -f1 < /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies)"; echo "gpu_opps=$(sed -n 's/.*freq = \([0-9]*\),.*/\1/p' /proc/gpufreq/gpufreq_opp_dump | tr '\n' ,)"; echo "io_scheds=$(tr -d '[]' < /sys/block/mmcblk0/queue/scheduler | tr ' ' ,)"; echo "tcps=$(tr ' ' , < /proc/sys/net/ipv4/tcp_available_congestion_control)"; echo "fonts=$(cmd overlay list --user 0 | grep -oE "[A-Za-z0-9_.]*\\.font\\.[a-z0-9]+\$" | sed "s/.*font\\.//" | sort -u | tr "\\n" ,)"; ovl "icon\\.squircle" && echo has_shapes=1 || echo has_shapes=0; ovl "icon_pack\\.rounded\\.android" && echo has_packs=1 || echo has_packs=0; pubcompile; pubapps; echo "pq_live=$(pq_live)"; echo "status=$perf_profile, GPU $([ "$gpu_eff" = 1 ] && echo locked $((gpu_freq/1000)) MHz || echo auto)"; } > $S.pub
   cat $S.pub > $APP/state   # building takes seconds (cmd overlay list), so the app's file is written in one go and never read half empty
 }
 
@@ -253,7 +253,12 @@ calc() {
   [ "$oc" = 1 ] && { minb=$topb; minl=$topl; }
   [ "$fg_boost" != auto ] && fg=$fg_boost
   gpu_eff=0; [ "$gpu_freq" != 0 ] && [ "$perf_profile" != battery ] && gpu_eff=1
-  [ "$cap_big" != -1 ]    && [ "$minb" -gt "$cap_big" ]    && minb=$cap_big
+  capb=$cap_big
+  if [ "$topb" -gt 2301000 ]; then   # a kernel with the 2.50 GHz step: the fast cores stop at the stock top (2.28 GHz step) unless the overclock is on
+    ocb=2301000; case $oc_status in testing|active) [ "$oc_cpu" != 0 ] && ocb=$oc_cpu;; esac
+    { [ "$capb" = -1 ] || [ "$capb" -gt "$ocb" ]; } && capb=$ocb
+  fi
+  [ "$capb" != -1 ]       && [ "$minb" -gt "$capb" ]       && minb=$capb
   [ "$cap_little" != -1 ] && [ "$minl" -gt "$cap_little" ] && minl=$cap_little
 }
 profile() {
@@ -261,7 +266,7 @@ profile() {
   w /proc/cpufreq/cpufreq_power_mode $pm
   w /proc/perfmgr/boost_ctrl/eas_ctrl/perfserv_fg_boost $fg
   w /proc/ppm/policy/userlimit_min_cpu_freq "0 -1"; w /proc/ppm/policy/userlimit_min_cpu_freq "1 -1"
-  w /proc/ppm/policy/userlimit_max_cpu_freq "0 $cap_big"; w /proc/ppm/policy/userlimit_max_cpu_freq "1 $cap_little"
+  w /proc/ppm/policy/userlimit_max_cpu_freq "0 $capb"; w /proc/ppm/policy/userlimit_max_cpu_freq "1 $cap_little"
   w /proc/ppm/policy/userlimit_min_cpu_freq "0 $minb"; w /proc/ppm/policy/userlimit_min_cpu_freq "1 $minl"
   if [ "$gpu_eff" = 1 ]; then w /proc/gpufreq/gpufreq_opp_freq $gpu_freq; else w /proc/gpufreq/gpufreq_opp_freq 0; fi
 }
@@ -345,7 +350,7 @@ pq_live() {
 }
 # saved profiles: one line per profile in $PF, "name|key=value key=value ...". They hold the performance, memory, picture and overclock keys (oc_master, oc_cpu_uv, oc_gpu), not the look. A profile saved before the overclock keys existed leaves the overclock as it is when applied; one that has them switches it on or off and the crash and thermal guards still apply.
 PF=/data/local/tmp/tuner.profiles
-PKEYS="perf_profile gpu_freq oc governor thermal fg_boost ta_boost big_rotation cap_big cap_little dirty swappiness vfs_cache extra_free page_cluster io_sched readahead tcp_cc touch_duration_ms touch_opp touch_boost schedstats down_throttle up_throttle cap_margin mcdi watermark pq_mode pq_contrast pq_sat pq_gamma pq_dre pq_vp_dre pq_hdr pq_ultrares pq_shp pq_bri pq_color oc_master oc_cpu_uv oc_gpu anim_scale cached_apps bg_procs carplay_boost window_blur"
+PKEYS="perf_profile gpu_freq oc governor thermal fg_boost ta_boost big_rotation cap_big cap_little dirty swappiness vfs_cache extra_free page_cluster io_sched readahead tcp_cc touch_duration_ms touch_opp touch_boost schedstats down_throttle up_throttle cap_margin mcdi watermark pq_mode pq_contrast pq_sat pq_gamma pq_dre pq_vp_dre pq_hdr pq_ultrares pq_shp pq_bri pq_color oc_master oc_cpu_uv oc_gpu anim_scale cached_apps bg_procs carplay_boost window_blur oc_cpu"
 # a bare | in a ${%%} pattern is alternation in the device's mksh (it matched the whole line), so it is escaped below
 # a copy of the current wallpaper for the picture preview in the app (the file is the system's, the app cannot read it)
 preview_photo() {
@@ -401,6 +406,7 @@ valid() {   # $1 key, $2 value
     pq_color) oneof "$2" 0 1 2 3;;
     oc_cpu_uv) oneof "$2" 0 1 2 4;;
     oc_gpu) oneof "$2" 0 730000 760000 800000 840000 880000 920000 940000;;
+    oc_cpu) oneof "$2" 0 2383000 2501000;;   # the fast cluster steps above the stock 2.30 GHz that the overclock kernel adds (its OPP table has 2.50 and 2.38 GHz as steps)
     oc_profile) oneof "$2" maxstable;;
     oc_stock) oneof "$2" 1;;
     *) return 0;;
@@ -519,7 +525,7 @@ handle() {
     case $v in ''|*[!A-Za-z0-9._-]*) log "reject $k"; continue;; esac
     valid "$k" "$v" || { log "reject $k=$v"; continue; }
     log "req $k=$v"
-    case $k in preset|restart_ui|reboot|compile_now|compile_all|compile_pkg|compile_pkg_profile|reset_pkg|refresh_apps|preview_photo|hub_mode|night|black_theme|phh_effects|nav_mode|anim_scale|density|bootanim|logging|palette_source|accent|theme_style|font|icon_shape|icon_pack|screen_timeout|font_scale|font_weight|text_contrast|carplay_boost|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|cached_apps|wifi_country|adb_tcp|bt_work|serial_console|pq_mode|pq_contrast|pq_sat|pq_gamma|pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_bri|pq_color|save_profile|update_profile|apply_profile|delete_profile|profile_active|profile_base|oc_master|oc_cpu_uv|oc_gpu|oc_profile|oc_stock) ;; *) putkey preset custom; putkey profile_active "";; esac
+    case $k in preset|restart_ui|reboot|compile_now|compile_all|compile_pkg|compile_pkg_profile|reset_pkg|refresh_apps|preview_photo|hub_mode|night|black_theme|phh_effects|nav_mode|anim_scale|density|bootanim|logging|palette_source|accent|theme_style|font|icon_shape|icon_pack|screen_timeout|font_scale|font_weight|text_contrast|carplay_boost|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|cached_apps|wifi_country|adb_tcp|bt_work|serial_console|pq_mode|pq_contrast|pq_sat|pq_gamma|pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_bri|pq_color|save_profile|update_profile|apply_profile|delete_profile|profile_active|profile_base|oc_master|oc_cpu_uv|oc_gpu|oc_cpu|oc_profile|oc_stock) ;; *) putkey preset custom; putkey profile_active "";; esac
     case " $PKEYS " in *" $k "*) putkey profile_active "";; esac   # saved keys changed: the profile in use no longer matches (profile_base stays, so the app offers Save changes)
     case $k in
       perf_profile|gpu_lock|gpu_freq|oc|fg_boost|cap_big|cap_little) P=1; U=1; putkey $k $v;;
@@ -528,9 +534,9 @@ handle() {
       screen_timeout|font_scale|font_weight|text_contrast|carplay_boost|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|cached_apps|wifi_country|adb_tcp|bt_work|serial_console) putkey $k $v; load; ext $k; continue;;
       night|black_theme|nav_mode|anim_scale|density|bootanim|logging) putkey $k $v;;
       pq_mode|pq_contrast|pq_sat|pq_gamma|pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_bri|pq_color) putkey $k $v; Q=1; load; continue;;
-      oc_master|oc_cpu_uv|oc_gpu) putkey $k $v;;
+      oc_master|oc_cpu_uv|oc_gpu|oc_cpu) putkey $k $v;;
       oc_profile) for kv in oc_master=1 oc=1 oc_cpu_uv=0 oc_gpu=730000 preset=custom profile_active=; do putkey ${kv%%=*} ${kv#*=}; done; P=1; U=1; load; continue;;
-      oc_stock) for kv in oc_master=0 oc=0 oc_cpu_uv=0 oc_gpu=0 oc_status=off preset=custom profile_active=; do putkey ${kv%%=*} ${kv#*=}; done; rm -f $OCM; load; oc_off; P=1; U=1; continue;;
+      oc_stock) for kv in oc_master=0 oc=0 oc_cpu_uv=0 oc_gpu=0 oc_cpu=0 oc_status=off preset=custom profile_active=; do putkey ${kv%%=*} ${kv#*=}; done; rm -f $OCM; load; oc_off; P=1; U=1; continue;;
       save_profile) profile_save $v; putkey profile_active $v; putkey profile_base $v; load; continue;;
       update_profile) if pf_line "$v" > /dev/null; then profile_save $v; putkey profile_active $v; putkey profile_base $v; else log "reject update_profile $v: no such profile"; fi; load; continue;;
       delete_profile) profile_delete $v; [ "$profile_active" = "$v" ] && putkey profile_active ""; [ "$profile_base" = "$v" ] && putkey profile_base ""; load; continue;;
@@ -572,23 +578,31 @@ OCM=/data/local/tmp/oc_pending
 OCG=/proc/gpufreq; OCE=/proc/eem; OCT=/sys/class/thermal; OCB=/proc/sys/kernel/random/boot_id
 OCMAXT=85000; OC_ON=0; OC_CUR=; OC_T0=0
 ocst() { lock_wait; putkey oc_status "$1"; load; publish; rmdir $LOCK; }   # publishes oc_status=off|waiting|testing|active|reverted_after_crash|thermal_revert|gpu_failed|cpu_failed|unsupported
-ockeys() { lock_wait; putkey oc_master 0; [ "$1" = all ] && { putkey oc_cpu_uv 0; putkey oc_gpu 0; }; rmdir $LOCK; }
-ocwant() { [ "$oc_master" = 1 ] && { [ "$oc_cpu_uv" != 0 ] || [ "$oc_gpu" != 0 ]; }; }
+ockeys() { lock_wait; putkey oc_master 0; [ "$1" = all ] && { putkey oc_cpu_uv 0; putkey oc_gpu 0; putkey oc_cpu 0; }; rmdir $LOCK; }
+ocwant() { [ "$oc_master" = 1 ] && { [ "$oc_cpu_uv" != 0 ] || [ "$oc_gpu" != 0 ] || [ "$oc_cpu" != 0 ]; }; }
 tmax() { cat $OCT/thermal_zone*/temp 2>/dev/null | sort -n | tail -n 1; }   # millidegrees, the hottest zone
 ocgtop() { sed -n '1s/.*freq = \([0-9]*\), volt = \([0-9]*\).*/\1 \2/p' $OCG/gpufreq_opp_dump; }   # top stock GPU OPP: "kHz 10uV"
-oc_off() {   # idempotent: stock voltage trim, GPU back on the OPP table, the saved GPU clock setting again
+oc_off() {   # idempotent: stock voltage trim, GPU back on the OPP table, the saved GPU clock setting again, the fast cores capped at the stock top step again
+  oc_status=off   # calc reads it (the cap above the stock top step is only lifted while the overclock is applied)
   for b in L L_HI 2L 2L_HI; do wn $OCE/EEM_DET_$b/eem_offset 0; done
   w $OCG/gpufreq_fixed_freq_volt "0 0"
   set -- $(ocgtop); [ -n "$1" ] && w $OCG/gpufreq_opp_freq $1
   calc; if [ "$gpu_eff" = 1 ]; then w $OCG/gpufreq_opp_freq $gpu_freq; else w $OCG/gpufreq_opp_freq 0; fi
+  profile
 }
 ocfail() { oc_off; rm -f $OCM; OC_ON=0; ockeys all; ocst $1; log "overclock $1"; }
 oc_on() {
   { cat $OCB; date +%s; } > $OCM; sync
-  OC_ON=1; OC_CUR="$oc_gpu/$oc_cpu_uv"; OC_T0=$(date +%s)
+  OC_ON=1; OC_CUR="$oc_gpu/$oc_cpu_uv/$oc_cpu"; OC_T0=$(date +%s)
+  ocst testing   # the state says so before the cap on the fast cores is lifted (a request handled meanwhile reads the state)
   if [ "$oc_cpu_uv" != 0 ]; then
     for b in L L_HI 2L 2L_HI; do wn $OCE/EEM_DET_$b/eem_offset -$oc_cpu_uv; done
     [ "$(cat $OCE/EEM_DET_L/eem_offset 2>/dev/null)" = "-$oc_cpu_uv" ] || { ocfail cpu_failed; return; }
+  fi
+  if [ "$oc_cpu" != 0 ]; then
+    set -- $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies)
+    [ "$1" -ge "$oc_cpu" ] || { ocfail cpu_failed; return; }   # the kernel has no such step (not the overclock kernel)
+    oc_status=testing; calc; profile       # lifts the cap at the stock top step to the chosen one
   fi
   if [ "$oc_gpu" != 0 ]; then
     set -- $(ocgtop)
@@ -599,7 +613,7 @@ oc_on() {
     d=$((rf - oc_gpu)); [ $d -lt 0 ] && d=$((-d))
     [ $d -gt $((oc_gpu / 50)) ] && { ocfail gpu_failed; return; }   # the PLL did not take the value (2 percent tolerance)
   fi
-  ocst testing; log "overclock on gpu=$oc_gpu cpu_uv=$oc_cpu_uv"
+  ocst testing; log "overclock on gpu=$oc_gpu cpu_uv=$oc_cpu_uv cpu=$oc_cpu"
 }
 oc_boot() {   # at daemon start: a marker from another boot means that boot ended while overclocked
   [ -f $OCM ] || return
@@ -607,12 +621,12 @@ oc_boot() {   # at daemon start: a marker from another boot means that boot ende
   rm -f $OCM; ockeys all; putkey oc_status reverted_after_crash; log "overclock reverted after a crash or reboot while overclocked"
 }
 oc_watch() {   # every 2 s from the daemon
-  load; sane oc_master 0; sane oc_cpu_uv 0; sane oc_gpu 0
+  load; sane oc_master 0; sane oc_cpu_uv 0; sane oc_gpu 0; sane oc_cpu 0
   t=$(tmax); t=${t:-0}
   if [ "$OC_ON" = 1 ]; then
     if [ "$t" -gt $OCMAXT ]; then oc_off; rm -f $OCM; OC_ON=0; ockeys; ocst thermal_revert; log "overclock thermal revert at $t"; return; fi
     if ! ocwant; then oc_off; rm -f $OCM; OC_ON=0; ocst off; return; fi
-    [ "$OC_CUR" != "$oc_gpu/$oc_cpu_uv" ] && { oc_off; oc_on; return; }
+    [ "$OC_CUR" != "$oc_gpu/$oc_cpu_uv/$oc_cpu" ] && { oc_off; oc_on; return; }
     [ -f $OCM ] && [ $(( $(date +%s) - OC_T0 )) -ge 180 ] && { rm -f $OCM; ocst active; }
   elif ocwant; then
     [ "$oc_status" != waiting ] && ocst waiting
@@ -635,7 +649,7 @@ rm -f $APP/request                          # the app recreates it; inotifyd wat
 [ -f $AFD ] && cat $AFD > $APP/apps_state   # the last compile state list, until the app asks for a new one
 w /proc/ppm/policy_status "2 0"; w /proc/ppm/policy_status "3 0"   # FORCE_LIMIT and PWR_THRO off
 w /proc/sys/kernel/printk "1 4 1 7"
-seedlive; load; oc_boot; load; profile; tune; [ "$cached_apps" != default ] && ext cached_apps; night_; nav; anim; density_; bootanim; pq_apply; [ "$logging" = 1 ] && logging
+seedlive; load; case $oc_status in testing|active) putkey oc_status off;; esac; oc_boot; load; profile; tune; [ "$cached_apps" != default ] && ext cached_apps; night_; nav; anim; density_; bootanim; pq_apply; [ "$logging" = 1 ] && logging
 ( sleep 12; load; black; sleep 25; black ) &
 # Treble Settings > Audio effects attaches DAP, Dynamics Processing, Loudness Enhancer, Visualizer and Downmix to every playback session; on this tablet
 # that cuts app audio after a few ms. Keep them off unless the user allows them (phh_effects=1).

@@ -14,7 +14,8 @@ calc() { gpu_eff=0; }
 w() { echo "$2" > "$1"; }
 wn() { [ -w "$1" ] && w "$1" "$2"; }
 eval "$(sed -n '/^oneof() /p;/^valid() /,/^}/p;/^sane() /p;/^putkey() /p;/^load() {/,/^}/p' $D/device/tablet_tunerd.sh)"
-eval "$(sed -n '/^# ---------- overclock/,/^# ---------- end overclock/p' $D/device/tablet_tunerd.sh)"
+profile() { :; }
+eval "$(sed -n '/^# ---------- overclock/,/^# ---------- end overclock/p' $D/device/tablet_tunerd.sh | sed "s#/sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies#$T/f0#g")"
 OCM=$T/oc_pending; OCG=$T/gpu; OCE=$T/eem; OCT=$T/thermal; OCB=$T/boot_id
 mkdir -p $OCG $OCT/thermal_zone0 $OCT/thermal_zone1
 for b in L L_HI 2L 2L_HI; do mkdir -p $OCE/EEM_DET_$b; echo 0 > $OCE/EEM_DET_$b/eem_offset; done
@@ -73,6 +74,29 @@ echo "[0] freq = 680000, volt = 80000, vsram = 87500, gpufreq_power = 746" > $OC
 # switching the master off while on: back to stock
 fresh 1 1 0; DSTART=$(( $(date +%s) - 60 )); oc_watch; putkey oc_master 0; oc_watch; load
 ok "off: status" "$oc_status" off; ok "off: offset" "$(cat $OCE/EEM_DET_L/eem_offset)" 0; ok "off: marker" "$([ -f $OCM ] && echo y || echo n)" n
+
+# CPU overclock: the overclock kernel's table has the 2.50 GHz and 2.38 GHz steps; the fast cores stay at the stock top step until it is applied
+eval "$(sed -n '/^calc() {/,/^}/p' $D/device/tablet_tunerd.sh | sed "s/^calc()/rcalc()/; s#/sys/devices/system/cpu/cpu\([04]\)/cpufreq/scaling_available_frequencies#$T/f\1#g")"
+profile() { rcalc; echo "$capb" > $T/capb; }
+perf_profile=balanced; oc=0; fg_boost=auto; gpu_freq=680000; cap_big=-1; cap_little=-1
+printf '2501000 2383000 2280000 2191000\n' > $T/f0; printf '1800000 1682000\n' > $T/f4
+valid oc_cpu 2501000 && a=y || a=n; ok "accept oc_cpu 2501000" $a y
+valid oc_cpu 2400000 && a=y || a=n; ok "reject oc_cpu 2400000 (not a step)" $a n
+fresh 0 0 0; profile; ok "cpu: stock cap on the overclock kernel" "$(cat $T/capb)" 2301000
+fresh 1 0 0; putkey oc_cpu 2501000; load; DSTART=$(( $(date +%s) - 60 )); oc_watch; load
+ok "cpu: testing" "$oc_status" testing; ok "cpu: cap lifted to 2.50 GHz" "$(cat $T/capb)" 2501000
+OC_T0=$(( $(date +%s) - 200 )); oc_watch; load
+ok "cpu: active" "$oc_status" active; ok "cpu: cap stays" "$(cat $T/capb)" 2501000
+putkey oc_cpu 2383000; load; oc_watch; load
+ok "cpu: another step" "$(cat $T/capb)" 2383000
+echo 90000 > $OCT/thermal_zone0/temp; oc_watch; load
+ok "cpu: thermal revert drops the cap" "$(cat $T/capb)" 2301000; echo 40000 > $OCT/thermal_zone0/temp
+fresh 1 0 0; putkey oc_cpu 2501000; load; DSTART=$(( $(date +%s) - 60 )); oc_watch; load; putkey oc_master 0; oc_watch; load
+ok "cpu: master off drops the cap" "$(cat $T/capb)" 2301000; ok "cpu: status off" "$oc_status" off
+fresh 1 0 0; printf '2301000 2215000\n' > $T/f0; putkey oc_cpu 2501000; load; DSTART=$(( $(date +%s) - 60 )); oc_watch; load
+ok "cpu: stock kernel refuses" "$oc_status" cpu_failed; ok "cpu: key reset" "$oc_cpu" 0
+profile; ok "cpu: stock kernel, no cap" "$(cat $T/capb)" -1
+printf '2501000 2383000 2280000 2191000\n' > $T/f0
 
 rm -rf $T; [ $fail = 0 ] && echo "all ok"; exit $fail
 

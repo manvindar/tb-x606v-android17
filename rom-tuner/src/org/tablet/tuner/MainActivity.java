@@ -1472,12 +1472,15 @@ public class MainActivity extends Activity {
 
     // ---------- overclock ----------
     private String ocSummary() {
-        boolean on = "1".equals(get("oc_master", "0")) && (!"0".equals(get("oc_gpu", "0")) || !"0".equals(get("oc_cpu_uv", "0")));
+        boolean on = "1".equals(get("oc_master", "0")) && (!"0".equals(get("oc_gpu", "0")) || !"0".equals(get("oc_cpu_uv", "0")) || !"0".equals(get("oc_cpu", "0")));
         String st_ = get("oc_status", "off");
         if (st_.startsWith("reverted") || st_.endsWith("revert")) return "Went back to stock, tap for the reason";
         if (!on) return "1".equals(get("oc", "0")) ? "Off, top clocks pinned" : "Off, everything at stock";
-        return ("0".equals(get("oc_gpu", "0")) ? "" : "GPU " + (Integer.parseInt(get("oc_gpu", "0")) / 1000) + " MHz") + ("0".equals(get("oc_gpu", "0")) || "0".equals(get("oc_cpu_uv", "0")) ? "" : ", ")
-            + ("0".equals(get("oc_cpu_uv", "0")) ? "" : "CPU voltage trim") + ", " + ocStatusWord(st_);
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        if (!"0".equals(get("oc_cpu", "0"))) parts.add("CPU " + String.format(java.util.Locale.US, "%.2f", Integer.parseInt(get("oc_cpu", "0")) / 1000000.0) + " GHz");
+        if (!"0".equals(get("oc_gpu", "0"))) parts.add("GPU " + (Integer.parseInt(get("oc_gpu", "0")) / 1000) + " MHz");
+        if (!"0".equals(get("oc_cpu_uv", "0"))) parts.add("CPU voltage trim");
+        return android.text.TextUtils.join(", ", parts) + ", " + ocStatusWord(st_);
     }
     private static String ocStatusWord(String s) {
         switch (s) { case "testing": return "testing"; case "active": return "stable"; case "waiting": return "waiting"; default: return "off"; }
@@ -1490,7 +1493,7 @@ public class MainActivity extends Activity {
             case "reverted_after_crash": return "Went back to stock: the tablet restarted while overclocked. Turn it on again with a lower setting to retry.";
             case "thermal_revert": return "Went back to stock: a temperature sensor passed 85 °C.";
             case "gpu_failed": return "Went back to stock: the GPU did not take the clock.";
-            case "cpu_failed": return "Went back to stock: the kernel did not take the CPU voltage trim.";
+            case "cpu_failed": return "Went back to stock: the kernel did not take the CPU setting (a CPU overclock needs the overclock kernel; the voltage trim needs the EEM nodes).";
             case "unsupported": return "Not available: this kernel's GPU table is not the expected one.";
             default: return "Off. Everything runs at stock.";
         }
@@ -1518,7 +1521,13 @@ public class MainActivity extends Activity {
             if (on) confirmOc(() -> { set("oc_master", "1"); build(); }); else { set("oc_master", "0"); build(); } });
         rowAction(c, "Max stable", "Turns it on with the safest useful settings: top CPU clocks pinned, GPU 730 MHz at the stock 0.80 V, no voltage change.", () -> confirmOc(() -> { set("oc_profile", "maxstable"); build(); }));
         c = group("CPU");
-        rowSwitch(c, "Maximum clocks", "Pins both CPU clusters at their top stock speed, 2.30 GHz fast cores and 1.80 GHz efficiency cores. The kernel has no higher step, so this is not an overclock.", "oc", "0");
+        rowSwitch(c, "Maximum clocks", "Pins both CPU clusters at their top speed: the fast cores at the stock top (2.28 GHz) or at the CPU overclock chosen below, the efficiency cores at 1.80 GHz. Alone this is not an overclock.", "oc", "0");
+        if (num(get("cpu_top", "0")) > 2301000L) {
+            rowChoice(c, "CPU overclock", "Raises the top speed of the four fast cores (cpu0 to cpu3) above their stock 2.30 GHz. Needs Allow overclock. The overclock kernel gives the table that has these steps; the voltage rises with the clock by itself (1.125 V at 2.50 GHz). Tested for 3 minutes of full load on all four cores at 2.50 GHz: stable, the chip reached 78 C. The efficiency cores stay at 1.80 GHz. After a crash the overclock switches itself off.", "oc_cpu",
+                new String[]{"Stock (2.28 GHz)", "2.38 GHz", "2.50 GHz"}, new String[]{"0", "2383000", "2501000"}, "0");
+        } else {
+            row(c, "CPU overclock", "Not available: this kernel stops at 2.30 GHz. It needs the overclock kernel (the boot image with the 2.50 GHz table).", null);
+        }
         rowChoice(c, "CPU voltage trim", "Lowers the CPU voltage at every step, 6 mV per notch. Less heat at the same speed. Too low freezes the tablet.", "oc_cpu_uv",
             new String[]{"Stock", "-6 mV", "-12 mV", "-25 mV"}, new String[]{"0", "1", "2", "4"}, "0");
         c = group("GPU");
