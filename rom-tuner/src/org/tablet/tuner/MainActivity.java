@@ -914,7 +914,7 @@ public class MainActivity extends Activity {
         if (shownIdx > 1) hs.post(() -> hs.scrollTo(Math.max(0, (shownIdx - 1) * px(230)), 0));
     }
 
-    /** The saved profiles in a sheet from the bottom: tap to apply, Delete, update the one in use, save the current settings. */
+    /** The saved profiles in a sheet from the bottom: Use, Delete, update the one in use, save the current settings. */
     private void showProfilesSheet() {
         final android.app.Dialog d = new android.app.Dialog(this);
         d.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
@@ -924,7 +924,7 @@ public class MainActivity extends Activity {
         TextView title = text("Profiles", 22, true, ink()); title.setPadding(px(20), 0, 0, px(8)); box.addView(title);
         LinearLayout list = newCard(); box.addView(list, new LinearLayout.LayoutParams(-1, -2));
         String active = get("profile_active", "");
-        row(list, "Save current settings\u2026", "Keeps performance, memory and picture settings under a name", text("＋", 22, true, accent())).setOnClickListener(v -> { d.dismiss(); askSaveProfile(); });
+        row(list, "Save current settings\u2026", "Keeps performance, memory, picture, overclock and animation settings under a name", text("＋", 22, true, accent())).setOnClickListener(v -> { d.dismiss(); askSaveProfile(); });
         if (canUpdateProfile()) {
             final String base = get("profile_base", "");
             row(list, "Update \u201c" + Profiles.shown(base) + "\u201d", "Overwrites the saved profile with the current settings", text("Update", 15, true, accent()))
@@ -932,12 +932,7 @@ public class MainActivity extends Activity {
         }
         for (final String n : get("profiles", "").split(",")) {
             if (n.isEmpty()) continue;
-            final String shown = Profiles.shown(n);
-            TextView del = text("Delete", 14, true, accent());
-            del.setPadding(px(12), px(8), px(4), px(8)); del.setMinHeight(px(48)); del.setMinWidth(px(48)); del.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-            del.setOnClickListener(v -> new AlertDialog.Builder(this).setMessage("Delete the profile \"" + shown + "\"?")
-                .setNegativeButton("Cancel", null).setPositiveButton("Delete", (dd, w) -> { d.dismiss(); set("delete_profile", n); }).show());
-            row(list, n.equals(active) ? shown + "  \u2713" : shown, n.equals(active) ? "In use" : "Tap to apply", del).setOnClickListener(v -> { d.dismiss(); set("apply_profile", n); });
+            profileRow(list, n, active, () -> d.dismiss());
         }
         d.setContentView(box);
         android.view.Window w = d.getWindow();
@@ -1343,7 +1338,7 @@ public class MainActivity extends Activity {
 
     /** Wide layout only: the saved profiles get a section of their own (the narrow home lists them under Overclock). */
     private void pageProfiles() {
-        TextView hint = text("Save the current performance, memory and picture settings under a name, then apply them again with one tap.", 13.5f, false, dim());
+        TextView hint = text("Save the current performance, memory and picture settings under a name, then press Use to apply them again.", 13.5f, false, dim());
         hint.setPadding(px(10), px(6), px(10), 0); col.addView(hint);
         profileRows(group(null));
     }
@@ -1363,22 +1358,43 @@ public class MainActivity extends Activity {
                 }).show());
     }
 
-    /** Saved profiles: tap to apply, Delete to remove, a row that overwrites the profile in use after edits, and a row that saves the current performance, memory and picture settings. */
+    /** Saved profiles: Use to apply, Delete to remove, a row that overwrites the profile in use after edits, and a row that saves the current performance, memory and picture settings. */
     private void profileRows(LinearLayout c) {
         String active = get("profile_active", "");
         if (canUpdateProfile()) updateProfileRow(c);
         for (final String n : get("profiles", "").split(",")) {
             if (n.isEmpty()) continue;
-            final String shown = n.replace('_', ' ');
-            TextView del = text("Delete", 14, true, accent());
-            del.setPadding(px(12), px(8), px(4), px(8)); del.setMinHeight(px(48)); del.setMinWidth(px(48)); del.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
-            del.setOnClickListener(v -> new AlertDialog.Builder(this).setMessage("Delete the profile \"" + shown + "\"?")
-                .setNegativeButton("Cancel", null).setPositiveButton("Delete", (d, w) -> set("delete_profile", n)).show());
-            row(c, n.equals(active) ? shown + "  ✓" : shown, n.equals(active) ? "In use" : "Tap to apply", del)
-                .setOnClickListener(v -> { set("apply_profile", n); });
+            profileRow(c, n, active, null);
         }
-        row(c, "Save current settings as a profile", "Keeps performance, memory and picture settings under a name", text("Save", 15, true, accent()))
+        row(c, "Save current settings as a profile", "Keeps performance, memory, picture, overclock and animation settings under a name", text("Save", 15, true, accent()))
             .setOnClickListener(v -> askSaveProfile());
+    }
+
+    /**
+     * One saved profile: its name, whether it is in use, and two buttons. A tap on the row does nothing; Use applies the profile and shows it as in use at once
+     * (the daemon needs a few seconds, and the old state read in between made the row look as if nothing had happened, so it was tapped again).
+     */
+    private void profileRow(LinearLayout c, final String n, String active, final Runnable closeSheet) {
+        final String shown = Profiles.shown(n);
+        final boolean inUse = n.equals(active);
+        LinearLayout btns = new LinearLayout(this); btns.setOrientation(LinearLayout.HORIZONTAL); btns.setGravity(Gravity.CENTER_VERTICAL);
+        TextView use = text(inUse ? "In use" : "Use", 15, true, inUse ? dim() : accent());
+        use.setPadding(px(14), px(8), px(14), px(8)); use.setMinHeight(px(48)); use.setMinWidth(px(72)); use.setGravity(Gravity.CENTER);
+        if (!inUse) use.setOnClickListener(v -> {
+            if (closeSheet != null) closeSheet.run();
+            long now = System.currentTimeMillis();
+            st.put("profile_active", n); st.put("profile_base", n); pend.put("profile_active", n, now); pend.put("profile_base", n, now);
+            set("apply_profile", n);
+            Toast.makeText(this, "Using \u201c" + shown + "\u201d", Toast.LENGTH_SHORT).show();
+            build();
+        });
+        btns.addView(use);
+        TextView del = text("Delete", 14, true, accent());
+        del.setPadding(px(12), px(8), px(4), px(8)); del.setMinHeight(px(48)); del.setMinWidth(px(48)); del.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+        del.setOnClickListener(v -> new AlertDialog.Builder(this).setMessage("Delete the profile \"" + shown + "\"?")
+            .setNegativeButton("Cancel", null).setPositiveButton("Delete", (dd, w) -> { if (closeSheet != null) closeSheet.run(); set("delete_profile", n); }).show());
+        btns.addView(del);
+        row(c, inUse ? shown + "  \u2713" : shown, inUse ? "In use" : "Saved profile", btns);
     }
 
     private void askSaveProfile() {

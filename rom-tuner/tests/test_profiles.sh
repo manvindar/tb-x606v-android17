@@ -68,6 +68,19 @@ ok "preset: base cleared" "$(st profile_base)" ""; ok "preset: active cleared" "
 req apply_profile=one
 req oc_stock=1
 ok "oc_stock edit: base kept" "$(st profile_base)" one; ok "oc_stock edit: active cleared" "$(st profile_active)" ""
+req apply_profile=one
+req oc_gpu=880000
+ok "oc edit: active cleared (the profile in use no longer matches)" "$(st profile_active)" ""; ok "oc edit: base kept (Save changes is offered)" "$(st profile_base)" one
+req apply_profile=one
+req pq_contrast=5
+ok "picture edit: active cleared" "$(st profile_active)" ""; ok "picture edit: base kept" "$(st profile_base)" one
+req apply_profile=one
+req oc_gpu=880000
+req anim_scale=0.5
+ok "anim edit: active cleared" "$(st profile_active)" ""
+req update_profile=one
+ok "update keeps the overclock and animation keys" "$(grep '^one|' $PF | grep -c 'oc_gpu=880000.*anim_scale=0.5')" 1
+ok "update: profile in use again" "$(st profile_active)" one
 
 # update_profile validation
 rm -f $PF; : > $S; load; req save_profile=keep

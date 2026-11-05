@@ -345,7 +345,7 @@ pq_live() {
 }
 # saved profiles: one line per profile in $PF, "name|key=value key=value ...". They hold the performance, memory, picture and overclock keys (oc_master, oc_cpu_uv, oc_gpu), not the look. A profile saved before the overclock keys existed leaves the overclock as it is when applied; one that has them switches it on or off and the crash and thermal guards still apply.
 PF=/data/local/tmp/tuner.profiles
-PKEYS="perf_profile gpu_freq oc governor thermal fg_boost ta_boost big_rotation cap_big cap_little dirty swappiness vfs_cache extra_free page_cluster io_sched readahead tcp_cc touch_duration_ms touch_opp touch_boost schedstats down_throttle up_throttle cap_margin mcdi watermark pq_mode pq_contrast pq_sat pq_gamma pq_dre pq_vp_dre pq_hdr pq_ultrares pq_shp pq_bri pq_color oc_master oc_cpu_uv oc_gpu"
+PKEYS="perf_profile gpu_freq oc governor thermal fg_boost ta_boost big_rotation cap_big cap_little dirty swappiness vfs_cache extra_free page_cluster io_sched readahead tcp_cc touch_duration_ms touch_opp touch_boost schedstats down_throttle up_throttle cap_margin mcdi watermark pq_mode pq_contrast pq_sat pq_gamma pq_dre pq_vp_dre pq_hdr pq_ultrares pq_shp pq_bri pq_color oc_master oc_cpu_uv oc_gpu anim_scale cached_apps bg_procs carplay_boost window_blur"
 # a bare | in a ${%%} pattern is alternation in the device's mksh (it matched the whole line), so it is escaped below
 # a copy of the current wallpaper for the picture preview in the app (the file is the system's, the app cannot read it)
 preview_photo() {
@@ -520,6 +520,7 @@ handle() {
     valid "$k" "$v" || { log "reject $k=$v"; continue; }
     log "req $k=$v"
     case $k in preset|restart_ui|reboot|compile_now|compile_all|compile_pkg|compile_pkg_profile|reset_pkg|refresh_apps|preview_photo|hub_mode|night|black_theme|phh_effects|nav_mode|anim_scale|density|bootanim|logging|palette_source|accent|theme_style|font|icon_shape|icon_pack|screen_timeout|font_scale|font_weight|text_contrast|carplay_boost|stay_awake|auto_rotate|show_taps|window_blur|dns|bg_procs|cached_apps|wifi_country|adb_tcp|bt_work|serial_console|pq_mode|pq_contrast|pq_sat|pq_gamma|pq_dre|pq_vp_dre|pq_hdr|pq_ultrares|pq_shp|pq_bri|pq_color|save_profile|update_profile|apply_profile|delete_profile|profile_active|profile_base|oc_master|oc_cpu_uv|oc_gpu|oc_profile|oc_stock) ;; *) putkey preset custom; putkey profile_active "";; esac
+    case " $PKEYS " in *" $k "*) putkey profile_active "";; esac   # saved keys changed: the profile in use no longer matches (profile_base stays, so the app offers Save changes)
     case $k in
       perf_profile|gpu_lock|gpu_freq|oc|fg_boost|cap_big|cap_little) P=1; U=1; putkey $k $v;;
       palette_source|accent|theme_style|font|icon_shape|icon_pack) T=1; putkey $k $v;;
@@ -533,7 +534,7 @@ handle() {
       save_profile) profile_save $v; putkey profile_active $v; putkey profile_base $v; load; continue;;
       update_profile) if pf_line "$v" > /dev/null; then profile_save $v; putkey profile_active $v; putkey profile_base $v; else log "reject update_profile $v: no such profile"; fi; load; continue;;
       delete_profile) profile_delete $v; [ "$profile_active" = "$v" ] && putkey profile_active ""; [ "$profile_base" = "$v" ] && putkey profile_base ""; load; continue;;
-      apply_profile) profile_apply $v && { P=1; U=1; Q=1; }; load; continue;;
+      apply_profile) if profile_apply $v; then P=1; U=1; Q=1; load; publish; [ -n "$anim_scale" ] && anim; for k_ in cached_apps bg_procs window_blur; do eval v_=\$$k_; [ -n "$v_" ] && ext $k_; done; else load; fi; continue;;
       preset) for kv in $(presets $v); do putkey ${kv%%=*} ${kv#*=}; done; putkey preset $v; putkey profile_active ""; putkey profile_base ""; P=1; U=1; load; continue;;
       restart_ui) pkill -f com.android.systemui; continue;;
       reboot) sync; reboot; continue;;
