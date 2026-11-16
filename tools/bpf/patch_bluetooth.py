@@ -29,4 +29,10 @@ def patch(data):
     if any(i not in allowed for i,(a,b) in enumerate(zip(data,result)) if a!=b):raise ValueError('Unexpected Bluetooth byte change')
     return bytes(result),{'input_sha256':digest(data),'output_sha256':digest(result),'build':'DP11.261030.003','changes':changes,'runtime_validation':False}
 if __name__=='__main__':
-    src,dst=sys.argv[1:];result,receipt=patch(Path(src).read_bytes());Path(dst).write_bytes(result);Path(dst+'.bluetooth-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n');print('Measured Bluetooth patch:',receipt['output_sha256'])
+    src,dst=sys.argv[1:]
+    data=Path(src).read_bytes()
+    if digest(data)!=SPEC['sha256']:
+        import subprocess
+        subprocess.run([sys.executable, str(Path(__file__).with_name('patch_bluetooth_legacy.py')), src, dst], check=True)
+    else:
+        result,receipt=patch(data);Path(dst).write_bytes(result);Path(dst+'.bluetooth-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n');print('Measured Bluetooth patch:',receipt['output_sha256'])
