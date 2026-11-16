@@ -143,7 +143,15 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --target "$CANDIDATE_SOURCE" --draft --prerelease \
             --title "Android 17 QPR3 Beta 4 (DP11.261030.003) — non-Pixel TB-X606V, experimental" \
             --notes-file docs/RELEASE_NOTES_NONPIXEL_BETA4.md
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > release-assets.json
+          gh api "repos/$GITHUB_REPOSITORY/releases" > release-list.json
+          release_id=$(python3 - <<'PYID'
+          import json, os
+          matches = [r for r in json.load(open('release-list.json')) if r['tag_name'] == os.environ['RELEASE_TAG'] and r['draft']]
+          assert len(matches) == 1
+          print(matches[0]['id'])
+          PYID
+          )
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" > release-assets.json
           python3 - <<'PYVERIFY'
           import hashlib, json
           from pathlib import Path
@@ -158,4 +166,4 @@ jobs:
                   with p.open('rb') as f: digest = 'sha256:' + hashlib.file_digest(f, 'sha256').hexdigest()
                   assert a['digest'] == digest
           PYVERIFY
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" -F draft=false -F prerelease=true -f make_latest=false --silent
