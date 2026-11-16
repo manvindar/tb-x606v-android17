@@ -29,6 +29,8 @@ jobs:
           fi
           echo "$GSI_SHA  gsi.zip" | sha256sum -c -
           unzip -q gsi.zip system.img
+      - name: Evidence retention regressions
+        run: python -m unittest discover -s build -p test_evidence_retention.py -v
       - name: Retain inputs and report all patch failures
         run: |
           python build/check_patches.py system.img --evidence-out evidence
