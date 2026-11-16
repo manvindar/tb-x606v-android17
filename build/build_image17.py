@@ -103,12 +103,15 @@ def apply(img):
     global cmds, readback_sources
     f = tmpf('cmds', '\n'.join(cmds) + '\n'); cmds = []
     out = subprocess.run([os.path.join(E2, 'debugfs'), '-w', '-f', f, img], capture_output=True, text=True)
+    with open(os.path.join(W, 'debugfs-' + os.path.basename(img) + '.exitcode.log'), 'w') as log:
+        log.write(str(out.returncode) + '\n')
     for stream in ('stdout', 'stderr'):
         with open(os.path.join(W, 'debugfs-' + os.path.basename(img) + '.' + stream + '.log'), 'w') as log:
             log.write(getattr(out, stream))
     bad = [l for l in (out.stdout + out.stderr).split('\n') if re.search(r'(?i)(error|not found|no such|not enough|no space|could not allocate|short write)', l) and not l.startswith('debugfs: rm ')]
     # `rm` of a path that does not exist yet prints "File not found by ext2_lookup": expected
     bad = [l for l in bad if 'File not found by ext2_lookup' not in l]
+    if out.returncode: sys.exit('debugfs exited with status ' + str(out.returncode))
     if bad: sys.exit('debugfs reported:\n' + '\n'.join(bad[:20]))
     for dst, src in readback_sources.items():
         expected = hashlib.sha256(open(src, 'rb').read()).hexdigest()

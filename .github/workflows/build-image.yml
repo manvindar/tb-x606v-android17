@@ -211,9 +211,14 @@ jobs:
           graphics_options=()
           if [ "${{ inputs.full_pixel }}" = true ]; then graphics_options+=(--pixel-tablet pixel_stage); fi
           if [ "${{ inputs.experimental_graphics }}" = true ]; then graphics_options+=(--legacy-graphics legacy_graphics); fi
+          set +e
           python build/build_image17.py "${graphics_options[@]}" --gsi system.img --donor "$DONOR_IMG" --out system-a17-nogapps.img \
             --gapps gapps/*.zip --out-gapps system-a17-gapps.img --port-repo port \
             --workdir build-work --build-tools "$ANDROID_HOME/build-tools/35.0.0" 2>&1 | tee image-build.log
+          build_status=$?
+          set -e
+          printf '{"exitcode":%s,"source_commit":"%s","actions_run":"%s"}\n' "$build_status" "$GITHUB_SHA" "$GITHUB_RUN_ID" > image-build-exit.json
+          if [ "$build_status" -ne 0 ]; then exit "$build_status"; fi
           rm system.img "$DONOR_IMG"
           ls -la *.img
 
@@ -224,6 +229,7 @@ jobs:
           name: lenovo-beta4-image-writer-diagnostics
           path: |
             image-build.log
+            image-build-exit.json
             build-work/debugfs-*.log
             build-work/cmds
           if-no-files-found: warn
