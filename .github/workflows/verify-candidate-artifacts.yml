@@ -8,8 +8,12 @@ on:
       candidate_source:
         description: Exact full source commit of that run
         required: true
+      publish_nonpixel:
+        description: Publish owner-requested experimental non-Pixel prerelease after verification
+        type: boolean
+        default: false
 permissions:
-  contents: read
+  contents: write
   actions: read
 jobs:
   verify:
@@ -20,6 +24,7 @@ jobs:
       CANDIDATE_RUN: ${{ inputs.candidate_run }}
       CANDIDATE_SOURCE: ${{ inputs.candidate_source }}
     steps:
+      - uses: actions/checkout@v7
       - name: Check completed exact build identity
         run: |
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > run.json
@@ -44,6 +49,10 @@ jobs:
           assert build['device'] == 'TB-X606V' and build['system_bytes'] == 4085252096
           assert build['experimental_graphics'] and build['graphics_acceptance'] is False
           assert build['device_validation'] is False
+          if '${{ inputs.publish_nonpixel }}' == 'true':
+              assert build.get('full_pixel') is False
+              assert build['gsi_build'] == 'DP11.261030.003'
+              assert build['gsi_sha256'] == '1cb1c5254299581246ba626faccd41566df25382cd0415d8b82bf2e2d80cbf6c'
           if build.get('full_pixel'):
               assert build['pixel_factory_build'] == 'DP11.261030.003'
               assert build['pixel_factory_sha256'] == '3ee3196ede239145409bd47bb003b7f7a501587c0c92be7a13dd3c91aca5a0e6'
@@ -111,3 +120,31 @@ jobs:
             candidate/SHA256SUMS.txt
             candidate/build-receipt.json
           if-no-files-found: error
+
+      - name: Publish verified experimental non-Pixel prerelease
+        if: inputs.publish_nonpixel
+        env:
+          RELEASE_TAG: v17-qpr3-beta4-nonpixel-r1
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" candidate/*.img.xz candidate/SHA256SUMS.txt \
+            candidate/build-receipt.json candidate/graphics-*.json artifact-verification.json \
+            --repo "$GITHUB_REPOSITORY" --target "$CANDIDATE_SOURCE" --draft --prerelease \
+            --title "Android 17 QPR3 Beta 4 (DP11.261030.003) — non-Pixel TB-X606V, experimental" \
+            --notes-file docs/RELEASE_NOTES_NONPIXEL_BETA4.md
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > release-assets.json
+          python3 - <<'PYVERIFY'
+          import hashlib, json
+          from pathlib import Path
+          assets = {a['name']: a for a in json.loads(Path('release-assets.json').read_text())['assets']}
+          files = list(Path('candidate').glob('*.img.xz')) + [Path('candidate/SHA256SUMS.txt'), Path('candidate/build-receipt.json'), Path('artifact-verification.json')] + list(Path('candidate').glob('graphics-*.json'))
+          assert len(assets) == len(files)
+          for p in files:
+              a = assets[p.name]
+              assert a['size'] == p.stat().st_size
+              # GitHub release API exposes uploaded-asset digests; verify when present.
+              if a.get('digest'):
+                  with p.open('rb') as f: digest = 'sha256:' + hashlib.file_digest(f, 'sha256').hexdigest()
+                  assert a['digest'] == digest
+          PYVERIFY
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false

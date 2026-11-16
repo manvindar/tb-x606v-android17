@@ -18,7 +18,7 @@ Hash/ABI/version/dependency/removed-export/flag-provider/AVB/readback/geometry g
 Use experimental_graphics=true and publish=false for this unaccepted build candidate.
 The option defers only unknown graphics caller coverage. Every such caller is recorded,
 acceptance=false remains in receipts, and no M30s caller recognition is assigned to the tablet.
-The experimental route cannot publish a release. It does not authorize a device write.
+The standard experimental build route cannot publish a release. On November 16, 2026, the owner explicitly requested publication of the newest non-Pixel edition. The artifact verification workflow may publish that candidate as an experimental prerelease after verifying both uploaded images, retaining acceptance=false and device_validation=false. This exception does not mark graphics as accepted. It does not authorize a device write.
 Actual tablet startup, graphics receiver layouts, namespace/mapper endpoint bindings and
 runtime behavior remain unverified. This port is for TB-X606V; TB-X606F is not accepted.
 
