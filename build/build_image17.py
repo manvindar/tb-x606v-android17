@@ -35,6 +35,7 @@ ap.add_argument('--port-repo', default=os.path.join(HERE, '..', '..', 'tb-x606v-
 ap.add_argument('--no-tuner', action='store_true'); ap.add_argument('--with-bootdiag', action='store_true', help='boot diagnostics service (logcat/kmsg into /data/local/tmp/bootdiag, costs performance)')
 ap.add_argument('--dolby', help='directory with DaxUI.apk, daxService.patched.apk (or daxService.apk) and com.dolby.daxservice.xml from the stock Lenovo firmware')
 ap.add_argument('--pixel', help='NikGapps-full-arm64-16-*.zip: source of the Pixel apps (Android 16 build; the launcher itself comes from --pixel-launcher-apk)')
+ap.add_argument('--pixel-tablet', help='Matching-build Pixel Tablet factory stage (SystemUI, Settings, launcher and apps)')
 ap.add_argument('--pixel-launcher-apk', help='Pixel Launcher built by tools/pixel/build_pixel_launcher.sh')
 ap.add_argument('--e2fs', help='directory with debugfs, e2fsck, resize2fs, mke2fs (default: found on PATH, /sbin, Homebrew)')
 ap.add_argument('--build-tools', help='Android SDK build-tools directory (zipalign, apksigner, d8); default $ANDROID_HOME/build-tools/<newest>')
@@ -149,6 +150,7 @@ bp += '\npersist.sys.bt.unsupported.commands=182\npersist.sys.usb.config=adb\nro
 bp += 'dalvik.vm.usap_pool_enabled=true\ndalvik.vm.usap_pool_size_max=4\ndalvik.vm.usap_pool_refill_threshold=2\n'    # pre-forked app processes: faster app start, GSIs ship it off
 bp += 'persist.vendor.sys.pq.shp.idx=0\n'     # MediaTek sharpening off by default: it makes video look worse (ROM Tuner > Picture quality changes it)
 bp += 'persist.sysui.disableBlur=1\n'     # window blur (Pixel Launcher drawer, shade) drops the GE8320 to ~17 fps: 72% janky frames with blur, 5% without
+bp += 'pm.dexopt.install=speed\npm.dexopt.install-bulk=speed\n'
 bp += 'persist.traced.enable=0\n'    # perfetto traced crash-loops on kernel 4.9 (no vsock) and flags_health_check retries every 5 s
 # stock-looking fingerprint assembled from the Lenovo vendor props (build id and incremental of V9.56). Made up: Lenovo's real one is not on the tablet, so Play does not know it
 bp += ('ro.build.fingerprint=Lenovo/full_achilles6_row_call/achilles6_row_call:10/QP1A.190711.020/TB-X606V_USR_S300665_2206300345_V9.56_BMP_ROW:user/release-keys\n'
@@ -159,11 +161,14 @@ bp += ("\n# Bluetooth profiles (what AOSP's bluetooth.mk sets; a GSI without it 
        'bluetooth.profile.hfp.ag.enabled=true\nbluetooth.profile.hid.host.enabled=true\nbluetooth.profile.hid.device.enabled=true\nbluetooth.profile.gatt.enabled=true\n'
        'bluetooth.profile.bas.client.enabled=true\nbluetooth.profile.opp.enabled=true\nbluetooth.profile.pan.nap.enabled=true\nbluetooth.profile.pan.panu.enabled=true\n'
        'bluetooth.profile.asha.central.enabled=true\n')
+if a.pixel_tablet: bp += 'persist.settings.large_screen_opt.enabled=true\n'
 replace(S, '/system/build.prop', tmpf('build.prop', bp))
 # the tablet reports its real identity (the GSI says "AOSP on ARM64"): streaming apps pick their quality tier by model, and Netflix only offered SD to the generic one
 pb = cat(S, '/system/product/etc/build.prop').decode()
 for k, v in (('brand', 'Lenovo'), ('device', 'achilles6_row_call'), ('manufacturer', 'LENOVO'), ('model', 'Lenovo TB-X606V'), ('name', 'full_achilles6_row_call')):
     pb, n = re.subn(r'(?m)^ro\.product\.product\.%s=.*$' % k, 'ro.product.product.%s=%s' % (k, v), pb); assert n == 1, k
+if a.pixel_tablet:
+    pb, n = re.subn(r'(?m)^ro\.build\.characteristics=.*$', 'ro.build.characteristics=tablet', pb); assert n == 1
 replace(S, '/system/product/etc/build.prop', tmpf('product.build.prop', pb))
 
 # 3 patched libraries --------------------------------------------------------------------------------------------------
@@ -409,13 +414,43 @@ if a.pixel:
     allow_xmls += [os.path.join(px, f) for f in staged if f.startswith('etc/permissions/') and f.endswith('.xml')]
     put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
     put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
+if a.pixel_tablet:
+    print('9c Pixel Tablet layer')
+    st = a.pixel_tablet
+    for dst, src in (('/system/system_ext/priv-app/SystemUI/SystemUI.apk', 'system_ext/priv-app/SystemUI/SystemUI.apk'),
+                     ('/system/system_ext/priv-app/Settings/Settings.apk', 'system_ext/priv-app/Settings/Settings.apk')):
+        replace(S, dst, os.path.join(st, src))            # same package, owner and label as the GSI's own apps
+    staged = sorted(os.path.relpath(os.path.join(r, f), st) for r, _, fs in os.walk(st) for f in fs)
+    new = [f for f in staged if f not in ('system_ext/priv-app/SystemUI/SystemUI.apk', 'system_ext/priv-app/Settings/Settings.apk')]
+    ensure_dirs('/system/' + f for f in new)
+    for f in new: put(os.path.join(st, f), '/system/' + f, '644', 0, 0, LIB if '/lib64/' in f else SYS)
+    # Device Health Services: TurboAdapter's JNI lib lives in system_ext/lib64, the app links it from its own lib/arm64 as on the Pixel
+    if 'system_ext/lib64/libpowerstatshaldataprovider.so' in staged:
+        mkdir('/system/system_ext/priv-app/TurboAdapter/lib'); mkdir('/system/system_ext/priv-app/TurboAdapter/lib/arm64')
+        symlink('/system/system_ext/priv-app/TurboAdapter/lib/arm64/libpowerstatshaldataprovider.so', '/system_ext/lib64/libpowerstatshaldataprovider.so')
+    # allowlists the Pixel's own xml does not cover for the partition of the app: Hub mode (product, the Pixel xml has it too) and TurboAdapter (system_ext: the Pixel keeps it in system_ext/etc/permissions, which is not staged)
+    for x, part in (('privapp-permissions-hub-a17.xml', 'product'), ('privapp-permissions-turbo-a17.xml', 'system_ext')):
+        put(os.path.join(TOOLS, 'pixel', x), f'/system/{part}/etc/permissions/{x}', '644'); allow_xmls.append(os.path.join(TOOLS, 'pixel', x) + ':' + part)
+    # the allowlist is read from the partition of the app: the launcher, SystemUI and Settings live in system_ext, so their extra entries go to /system/system_ext/etc/permissions
+    put(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml'), '/system/system_ext/etc/permissions/privapp-permissions-pixeltablet-a17.xml', '644')
+    allow_xmls.append(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml') + ':system_ext')
+    allow_xmls += [os.path.join(st, f) + ':product' for f in staged if f.startswith('product/etc/permissions/') and f.endswith('.xml')]
+    priv_apks += [os.path.join(st, f) + (':system_ext' if f.startswith('system_ext/') else ':product') for f in staged if '/priv-app/' in f and f.endswith('.apk')]
+    # Pixel boot animation: the default slot of ROM Tuner ("gemini") and the plain file
+    for pz, dsts in (('product/media/bootanimation-pixel.zip', ('bootanimation.zip', 'bootanimation-gemini.zip')), ('product/media/bootanimation-pixel-dark.zip', ('bootanimation-dark.zip',))):
+        fitted = wp(os.path.basename(pz)); py(os.path.join('pixel', 'fit_bootanimation.py'), os.path.join(st, pz), fitted)    # canvas 2560x1600 -> this panel (1200x1920), see the script
+        for d in dsts: put(fitted, '/system/product/media/' + d, '644')
+    # AOSP Provision is a second SETUP_WIZARD activity: with two, PackageManager names no setup wizard package and the Google wizard never gets the `setup` permissions (NETWORK_SETUP_WIZARD: wifi page crashes)
+    cmds.append('rm /system/system_ext/priv-app/Provision/Provision.apk')
+    put(os.path.join(TOOLS, 'pixel', 'pixel_home.sh'), '/system/bin/pixel_home.sh', '755')
+    put(tmpf('zz_pixel_home.rc', open(os.path.join(TOOLS, 'pixel', 'zz_pixel_home.rc')).read()), '/system/etc/init/zz_pixel_home.rc', '644')
 if priv_apks:
     # a priv-app with a privileged permission that no allowlist grants aborts system_server at boot (boot animation forever): refuse to build it
     print('  privileged permission allowlist check')
     for apk in ('/system/framework/framework-res.apk', '/system/system_ext/priv-app/SystemUI/SystemUI.apk'): open(wp(os.path.basename(apk)), 'wb').write(cat(S, apk))
     for d in ('/system/etc/permissions', '/system/product/etc/permissions', '/system/system_ext/etc/permissions'):
         for n in ls_names(d):
-            if n.startswith('privapp-permissions') and n.endswith('.xml'): allow_xmls.append(tmpf('allow_' + n, cat(S, d + '/' + n)))
+            if n.endswith('.xml'): allow_xmls.append(tmpf('allow_' + n, cat(S, d + '/' + n)) + ':' + ('product' if '/product/' in d else 'system_ext' if '/system_ext/' in d else 'system'))
     r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'pixel', 'check_privapp_offline.py'), '--perm-apk', wp('framework-res.apk'), '--perm-apk', wp('SystemUI.apk')]
                        + [x for f in allow_xmls for x in ('--allow', f)] + [x for f in priv_apks for x in ('--apk', f)], capture_output=True, text=True, env=dict(os.environ, BUILD_TOOLS=BT))
     print(r.stdout.rstrip())

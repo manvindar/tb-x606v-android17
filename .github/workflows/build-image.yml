@@ -21,6 +21,10 @@ on:
         description: Build-only legacy graphics candidate; caller/runtime acceptance remains false
         type: boolean
         default: false
+      full_pixel:
+        description: Include matching Beta4 Pixel Tablet UI, launcher and app layer
+        type: boolean
+        default: false
       tag:
         description: Release tag (used when publishing)
         default: v17-dp11-ci
@@ -188,10 +192,23 @@ jobs:
       - name: Release verified legacy archive
         if: inputs.experimental_graphics && inputs.mode != 'check'
         run: rm -- legacy-gsi.zip
+      - name: Stage matching Beta4 Pixel Tablet apps
+        if: inputs.mode != 'check' && inputs.full_pixel
+        env:
+          FACTORY_URL: https://dl.google.com/developers/android/cinnamonbun/images/factory/tangorpro_beta-dp11.261030.003-factory-3ee3196e.zip
+          FACTORY_SHA256: 3ee3196ede239145409bd47bb003b7f7a501587c0c92be7a13dd3c91aca5a0e6
+        run: |
+          test "$GSI_BUILD" = DP11.261030.003
+          curl -L --fail --retry 5 --retry-delay 10 -o factory.zip "$FACTORY_URL"
+          echo "$FACTORY_SHA256  factory.zip" | sha256sum -c -
+          python3 tools/pixel/stage_pixel_tablet.py factory.zip pixel_stage --build-tools "$ANDROID_HOME/build-tools/35.0.0"
+          rm factory.zip
+
       - name: Build the images
         if: inputs.mode != 'check'
         run: |
           graphics_options=()
+          if [ "${{ inputs.full_pixel }}" = true ]; then graphics_options+=(--pixel-tablet pixel_stage); fi
           if [ "${{ inputs.experimental_graphics }}" = true ]; then graphics_options+=(--legacy-graphics legacy_graphics); fi
           python build/build_image17.py "${graphics_options[@]}" --gsi system.img --donor "$DONOR_IMG" --out system-a17-nogapps.img \
             --gapps gapps/*.zip --out-gapps system-a17-gapps.img --port-repo port \
@@ -236,6 +253,9 @@ jobs:
           from pathlib import Path
           experimental = '${{ inputs.experimental_graphics }}' == 'true'
           Path('build-receipt.json').write_text(json.dumps({
+              'full_pixel': '${{ inputs.full_pixel }}' == 'true',
+              'pixel_factory_build': 'DP11.261030.003' if '${{ inputs.full_pixel }}' == 'true' else None,
+              'pixel_factory_sha256': '3ee3196ede239145409bd47bb003b7f7a501587c0c92be7a13dd3c91aca5a0e6' if '${{ inputs.full_pixel }}' == 'true' else None,
               'source_commit': os.environ['GITHUB_SHA'], 'actions_run': os.environ['GITHUB_RUN_ID'],
               'gsi_build': os.environ['GSI_BUILD'], 'gsi_sha256': os.environ['GSI_ZIP_SHA256'],
               'device': 'TB-X606V', 'system_bytes': 4085252096, 'experimental_graphics': experimental,

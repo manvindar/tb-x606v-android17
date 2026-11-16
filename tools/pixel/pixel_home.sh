@@ -2,7 +2,7 @@
 # One shot after the first boot with the Pixel layer: the Pixel Launcher becomes the home app and the AOSP Contacts and Files launcher icons are hidden
 # (the Google versions are installed next to them). Launcher3 stays installed: it is the recents provider. The marker keeps a later choice of home app from being overridden;
 # wiping /data runs this again.
-M=/data/local/tmp/.pixel_home_done
+M=/data/local/tmp/.pixel_home_beta4_done
 [ -e $M ] && exit 0
 P=com.google.android.apps.nexuslauncher
 i=0
