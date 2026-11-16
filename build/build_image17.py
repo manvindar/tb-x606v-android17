@@ -109,7 +109,9 @@ def apply(img):
     if bad: sys.exit('debugfs reported:\n' + '\n'.join(bad[:20]))
     for dst, src in readback_sources.items():
         expected = hashlib.sha256(open(src, 'rb').read()).hexdigest()
-        actual = hashlib.sha256(cat(img, dst)).hexdigest()
+        if b'Inode:' not in dbg(img, 'stat', dst).stdout:
+            sys.exit('Written file missing: ' + dst)
+        actual = hashlib.sha256(dbg(img, 'cat', dst).stdout).hexdigest()
         if actual != expected: sys.exit('Written file readback mismatch: ' + dst)
     print('  exact written-file readback:', len(readback_sources), 'files')
     readback_sources = {}

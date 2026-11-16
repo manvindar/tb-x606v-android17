@@ -37,6 +37,17 @@ class ImageWrites(unittest.TestCase):
         self.write(f, f)
         self.assertEqual({}, self.ns['readback_sources'])
 
+    def test_empty_written_file_passes(self):
+        f = self.root/'empty';f.write_bytes(b'')
+        self.write(f, f)
+        self.assertEqual({}, self.ns['readback_sources'])
+
+    def test_missing_empty_file_rejects(self):
+        f = self.root/'empty';f.write_bytes(b'')
+        self.ns['readback_sources'] = {'/missing': str(f)}
+        with self.assertRaisesRegex(SystemExit, 'Written file missing'):
+            self.ns['apply'](str(self.image))
+
     def test_different_written_bytes_reject(self):
         good = self.root/'good';good.write_bytes(b'expected content')
         bad = self.root/'bad';bad.write_bytes(b'different content')
