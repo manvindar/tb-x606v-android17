@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Select exact Beta 4 measured patches; retain earlier guarded patch support."""
 import hashlib
+import json
 from pathlib import Path
 import subprocess
 import sys
-from patch_tethering import SPEC
+SPEC = json.loads(Path(__file__).with_name('tethering-DP11.261030.003.json').read_text())
 if __name__ == '__main__':
     tool, src, dst = sys.argv[1:]
     sha = hashlib.sha256(Path(src).read_bytes()).hexdigest()
