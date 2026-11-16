@@ -334,6 +334,16 @@ replace(S, '/system/etc/init/lmkd.rc', tmpf('lmkd.rc', rc.replace('    critical\
 run('sh', os.path.join(TOOLS, 'lights', 'build.sh'), env=dict(os.environ, ANDROID_HOME=os.path.abspath(os.path.join(BT, '..', '..')), BUILD_TOOLS=BT))
 put(os.path.join(TOOLS, 'lights', 'out', 'lightsshim.jar'), '/system/etc/lightsshim.jar', '644')
 put(os.path.join(TOOLS, 'lights', 'lightsshim.sh'), '/system/bin/lightsshim.sh', '755'); put(os.path.join(TOOLS, 'lights', 'lightsshim.rc'), '/system/etc/init/lightsshim.rc', '644')
+# Vendor declares the AIDL health service: ship its implementation with System.
+run('sh', os.path.join(TOOLS, 'health', 'build.sh'), env=dict(os.environ, ANDROID_HOME=os.path.abspath(os.path.join(BT, '..', '..')), BUILD_TOOLS=BT))
+put(os.path.join(TOOLS, 'health', 'out', 'healthshim.jar'), '/system/etc/healthshim.jar', '644')
+put(os.path.join(TOOLS, 'health', 'healthshim.sh'), '/system/bin/healthshim.sh', '755')
+put(os.path.join(TOOLS, 'health', 'healthshim.rc'), '/system/etc/init/healthshim.rc', '644')
+# The declared AIDL vibrator must also have a running System implementation.
+run('sh', os.path.join(TOOLS, 'vibrator', 'build.sh'), env=dict(os.environ, ANDROID_HOME=os.path.abspath(os.path.join(BT, '..', '..')), BUILD_TOOLS=BT))
+put(os.path.join(TOOLS, 'vibrator', 'out', 'vibratorshim.jar'), '/system/etc/vibratorshim.jar', '644')
+put(os.path.join(TOOLS, 'vibrator', 'vibratorshim.sh'), '/system/bin/vibratorshim.sh', '755')
+put(os.path.join(TOOLS, 'vibrator', 'vibratorshim.rc'), '/system/etc/init/vibratorshim.rc', '644')
 # init.rc starts the UART console on debuggable builds and ActivityManager then warns "Serial console enabled, performance is impacted" every boot
 rc = cat(S, '/system/etc/init/hw/init.rc').decode(); old = 'on init && property:ro.debuggable=1\n    start console\n'; assert old in rc
 replace(S, '/system/etc/init/hw/init.rc', tmpf('init.rc', rc.replace(old, '# console shell on the UART only when asked (ROM Tuner: Serial console). ActivityManager shows a performance warning whenever init.svc.console is running.\n'

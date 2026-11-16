@@ -1,0 +1,6 @@
+service vibratorshim /system/bin/vibratorshim.sh
+    class hal
+    user system
+    group system
+    seclabel u:r:init:s0
+    interface aidl android.hardware.vibrator.IVibrator/default
