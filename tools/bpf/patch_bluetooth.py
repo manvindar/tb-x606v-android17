@@ -1,16 +1,32 @@
-#!/usr/bin/env python3
-"""com.android.bt libbluetooth_jni.so (Android 17): the vendor controller answers READ_DEFAULT_ERRONEOUS_DATA_REPORTING (0x0c5a) with
-UNKNOWN_HCI_COMMAND as a Command Status; HciLayer::impl::on_hci_event then log::fatal()s "was not expecting status event" (two template instances).
-Retarget the two `tbz w20,#0,<fatal block>` (0xc24528, 0xc248f0) to the normal exit (0xc24554, 0xc249ac): an event that does not match the queued command is ignored, a matching one is handled as before (an unconditional `b` skipped the handling of every event). Bind-mount the result over the apex lib64 copy.
-usage: patch_bluetooth.py IN OUT"""
-import struct, sys
-d = bytearray(open(sys.argv[1], 'rb').read())
-for a, t, x in ((0xc24528, 0xc25738, 0xc24554), (0xc248f0, 0xc25770, 0xc249ac)):
-    o = struct.unpack_from('<I', d, a)[0]
-    assert (o & 0xfff80000) == 0x36000000 and (o & 0x1f) == 20 and a + ((o >> 5) & 0x3fff) * 4 == t, hex(o)
-    struct.pack_into('<I', d, a, (o & ~(0x3fff << 5)) | ((((x - a) >> 2) & 0x3fff) << 5))   # same tbz, new target
-# btm_sec_dev_reset (0xabaedc): `tbz w0,#0,<fatal "only controllers with SSP is supported">` after Controller::SupportsSimplePairing(); the check fails
-# with the features read through the ignored status, so accept it (the chip is BT 5.0 and does support SSP).
-assert struct.unpack_from('<I', d, 0xabaf10)[0] == 0x36000000 | (((0xabafec - 0xabaf10) >> 2) << 5) | 0
-struct.pack_into('<I', d, 0xabaf10, 0xd503201f)
-open(sys.argv[2], 'wb').write(d); print('patched ->', sys.argv[2])
+"""Exact guarded port of the three established Bluetooth compatibility sites.
+Preserve conditional handling; redirect only unexpected status paths to measured normal exits.
+Static patch evidence is not controller or pairing runtime verification.
+"""
+import hashlib,json,struct,sys
+from pathlib import Path
+SPEC=json.loads(Path(__file__).with_name('bluetooth-DP11.261030.003.json').read_text())
+def digest(data):return hashlib.sha256(data).hexdigest()
+def tbz_target(word,off):
+    value=(word>>5)&0x3fff
+    if value&0x2000:value-=0x4000
+    return off+value*4
+def patch(data):
+    if len(data)!=SPEC['bytes'] or digest(data)!=SPEC['sha256']:raise ValueError('Unknown Bluetooth input build')
+    result=bytearray(data);changes=[]
+    for site in SPEC['sites']:
+        off=site['offset'];word=struct.unpack_from('<I',data,off)[0]
+        if word!=site['word'] or digest(data[off-32:off+36])!=site['window_sha256']:raise ValueError('Bluetooth exact instruction/window mismatch')
+        register=20 if site['normal_exit'] is not None else 0
+        if word&0xfff8001f!=0x36000000|register or tbz_target(word,off)!=site['target']:raise ValueError('Bluetooth conditional/error target mismatch')
+        if site['normal_exit'] is None:replacement=0xd503201f
+        else:
+            dest=site['normal_exit'];delta=dest-off
+            if delta%4 or not -(1<<15)<=delta<(1<<15) or not 0<=dest<len(data):raise ValueError('Bluetooth normal exit out of range')
+            replacement=(word&~(0x3fff<<5))|(((delta>>2)&0x3fff)<<5)
+            if replacement&0xfff8001f!=word&0xfff8001f:raise ValueError('Bluetooth condition changed')
+        struct.pack_into('<I',result,off,replacement);changes.append(dict(site,replacement=hex(replacement)))
+    allowed={s['offset']+i for s in SPEC['sites'] for i in range(4)}
+    if any(i not in allowed for i,(a,b) in enumerate(zip(data,result)) if a!=b):raise ValueError('Unexpected Bluetooth byte change')
+    return bytes(result),{'input_sha256':digest(data),'output_sha256':digest(result),'build':'DP11.261030.003','changes':changes,'runtime_validation':False}
+if __name__=='__main__':
+    src,dst=sys.argv[1:];result,receipt=patch(Path(src).read_bytes());Path(dst).write_bytes(result);Path(dst+'.bluetooth-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n');print('Measured Bluetooth patch:',receipt['output_sha256'])

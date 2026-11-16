@@ -1,0 +1,27 @@
+{
+  "sha256": "0d11d654500ecc7a749af5568204e6217868b82fe816a145a32e05b40404bec0",
+  "bytes": 15636808,
+  "sites": [
+    {
+      "offset": 12931256,
+      "word": 906006900,
+      "target": 12935908,
+      "normal_exit": 12931300,
+      "window_sha256": "18ba1923f8c3f9db4bf6ded5a085926bcc4744be52dc81f1bd7c270070069d30"
+    },
+    {
+      "offset": 12932216,
+      "word": 905999668,
+      "target": 12935964,
+      "normal_exit": 12932400,
+      "window_sha256": "3a7006f4239b8082299c15eea5cd682b4b66f43056a730b7c7da115d893fd0f0"
+    },
+    {
+      "offset": 11449476,
+      "word": 905971424,
+      "target": 11449696,
+      "normal_exit": null,
+      "window_sha256": "ec4cb648b01c6a1583d5e45f770a981db69a6da519ba5b2d1a944b2636b3d251"
+    }
+  ]
+}

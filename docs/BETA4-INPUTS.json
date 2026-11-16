@@ -1,0 +1,19 @@
+{
+  "channel": "Android 17 QPR3 Beta 4",
+  "build_id": "DP11.261030.003",
+  "gsi": {
+    "architecture": "arm64",
+    "url": "https://dl.google.com/developers/android/cinnamonbun/images/gsi/aosp_arm64-exp-DP11.261030.003-16847878-1cb1c525.zip",
+    "sha256": "1cb1c5254299581246ba626faccd41566df25382cd0415d8b82bf2e2d80cbf6c",
+    "source": "https://developer.android.com/topic/generic-system-image/releases#17-qpr3-beta"
+  },
+  "legacy_graphics": {
+    "build_id": "DP11.261016.003",
+    "url": "https://dl.google.com/developers/android/cinnamonbun/images/gsi/aosp_arm64-exp-DP11.261016.003-16708287-d735a3b1.zip",
+    "sha256": "d735a3b11fe1b76a736f325f5500f7211167642fe2ed39dae0cf530d1cf51436",
+    "scope": "libui system/codec variants and missing HIDL graphics2/3 interface libraries only",
+    "reason": "TB-X606V vendor uses legacy HIDL mapper; Beta 4 GSI removes that backend.",
+    "validation": "Unchanged mapper/video patch guards, both-ABI dependency/namespace checks and all final native consumers before publication",
+    "runtime_validation": false
+  }
+}

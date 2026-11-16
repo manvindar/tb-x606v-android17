@@ -1,0 +1,40 @@
+{
+  "repository": "https://android.googlesource.com/platform/system/core",
+  "commit": "68be0c2c0006a0740d0b1809abe4717308f90d15",
+  "files": {
+    "sync.c": {
+      "source_path": "libsync/sync.c",
+      "sha256": "98d0865ac110044ac8153d445145542ba81b24951931e25ea12561ff48b56e1a"
+    },
+    "libsync.map.txt": {
+      "source_path": "libsync/libsync.map.txt",
+      "sha256": "977e84fa5f63dc8038284a99966d77e6934694c17e2a6c87fc225dd36015d6d8"
+    },
+    "android/sync.h": {
+      "source_path": "libsync/include/ndk/sync.h",
+      "sha256": "aca9fbefc5eb2d170451555b191bd9b15b13440aac9ec09a631c9b8bda025c28"
+    },
+    "NOTICE": {
+      "source_path": "libsync/NOTICE",
+      "sha256": "efcb3b0d1a6686c84546d85d1ad53ae01b0535443972c1f33eb248ae24b8357d"
+    }
+  },
+  "ndk": "26.1.10909125",
+  "api": 26,
+  "purpose": "Experimental codec-local genuine LIBSYNC provider; no graphics acceptance",
+  "verified_build": {
+    "run": 43779726191,
+    "artifact": 14187214902,
+    "commit": "a595006e0491002c6dd0cea8342d7caea3681652"
+  },
+  "outputs": {
+    "arm64": {
+      "sha256": "ec3d2964b71945735f66afe0222d538210b44408b0658a94b7ac3708dcf902df",
+      "bytes": 9256
+    },
+    "arm32": {
+      "sha256": "36f7a13bc396707eed99ea079712b248936b64700edeb0d6da6a45e62e9b453e",
+      "bytes": 7248
+    }
+  }
+}

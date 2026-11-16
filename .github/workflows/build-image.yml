@@ -17,6 +17,10 @@ on:
         description: Publish a GitHub release with the images (build mode)
         type: boolean
         default: false
+      experimental_graphics:
+        description: Build-only legacy graphics candidate; caller/runtime acceptance remains false
+        type: boolean
+        default: false
       tag:
         description: Release tag (used when publishing)
         default: v17-dp11-ci
@@ -49,6 +53,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Reject publishing unaccepted experimental graphics
+        if: inputs.experimental_graphics && inputs.publish
+        run: exit 1
       - uses: actions/checkout@v7
 
       - name: Android 16 port repo (ROM Tuner, boot animations)
@@ -83,7 +90,7 @@ jobs:
           sudo apt-get install -y e2fsprogs erofs-utils p7zip-full xz-utils zip unzip openssl
           pip install capstone
           if [ "${{ inputs.mode }}" != "check" ]; then
-            sdkmanager "build-tools;35.0.0" "platforms;android-34"
+            sdkmanager "build-tools;35.0.0" "platforms;android-34" "ndk;26.1.10909125"
             zig version
           fi
           debugfs -V; fsck.erofs --help 2>&1 | head -1
@@ -154,10 +161,39 @@ jobs:
           mkdir gapps && cd gapps && gh release download "$TAG" -R $REPO -p '*.zip' -p '*.sha256sum'
           sha256sum -c *.sha256sum
 
+      - name: Regression checks for scoped Beta 4 ports
+        if: inputs.mode != 'check'
+        run: |
+          python -m unittest discover -s build -p 'test_*.py' -v
+          python -m unittest discover -s tools/libc -p test_budget_watchers.py -v
+          python -m unittest discover -s tools/bpf -p 'test_*.py' -v
+          python -m unittest discover -s tools/graphics -p 'test_*.py' -v
+      - uses: actions/cache/restore@v6
+        if: inputs.experimental_graphics && inputs.mode != 'check'
+        id: legacycache
+        with:
+          path: legacy-gsi.zip
+          key: gsi-d735a3b11fe1b76a736f325f5500f7211167642fe2ed39dae0cf530d1cf51436
+      - name: Stage exact legacy mapper compatibility provider
+        if: inputs.experimental_graphics && inputs.mode != 'check'
+        run: |
+          python tools/graphics/stage_legacy.py docs/BETA4-INPUTS.json legacy_graphics --archive-cache legacy-gsi.zip
+          export PATH="$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          python tools/graphics/build_sync_provider.py "$ANDROID_HOME/ndk/26.1.10909125" legacy_graphics/sync-provider
+      - uses: actions/cache/save@v6
+        if: inputs.experimental_graphics && inputs.mode != 'check' && steps.legacycache.outputs.cache-hit != 'true'
+        with:
+          path: legacy-gsi.zip
+          key: gsi-d735a3b11fe1b76a736f325f5500f7211167642fe2ed39dae0cf530d1cf51436
+      - name: Release verified legacy archive
+        if: inputs.experimental_graphics && inputs.mode != 'check'
+        run: rm -- legacy-gsi.zip
       - name: Build the images
         if: inputs.mode != 'check'
         run: |
-          python build/build_image17.py --gsi system.img --donor "$DONOR_IMG" --out system-a17-nogapps.img \
+          graphics_options=()
+          if [ "${{ inputs.experimental_graphics }}" = true ]; then graphics_options+=(--legacy-graphics legacy_graphics); fi
+          python build/build_image17.py "${graphics_options[@]}" --gsi system.img --donor "$DONOR_IMG" --out system-a17-nogapps.img \
             --gapps gapps/*.zip --out-gapps system-a17-gapps.img --port-repo port \
             --build-tools "$ANDROID_HOME/build-tools/35.0.0"
           rm system.img "$DONOR_IMG"
@@ -173,6 +209,21 @@ jobs:
           debugfs -R 'ls -l /system/lib64/a16audio' system-a17-nogapps.img | wc -l
           debugfs -R 'stat /system/product/priv-app/GmsCore/GmsCore.apk' system-a17-gapps.img | head -1
 
+      - name: Final both-ABI graphics linkage and image readback
+        if: inputs.experimental_graphics && inputs.mode != 'check'
+        run: |
+          python tools/graphics/verify_final.py system-a17-nogapps.img legacy_graphics graphics-nogapps.json --experimental-dirty-flash
+          python tools/graphics/verify_final.py system-a17-gapps.img legacy_graphics graphics-gapps.json --experimental-dirty-flash
+      - uses: actions/upload-artifact@v7
+        if: always() && inputs.experimental_graphics
+        with:
+          name: lenovo-beta4-graphics-evidence
+          path: |
+            graphics-*.json
+            legacy_graphics/*receipt.json
+            legacy_graphics/abi-consumers/
+            legacy_graphics/binding-configuration/
+          if-no-files-found: warn
       - name: Compress
         if: inputs.mode != 'check'
         run: |
@@ -180,6 +231,18 @@ jobs:
           xz -T0 -6 -c system-a17-nogapps.img > system-a17-tb-x606v-nogapps-nodexopt.img.xz
           rm system-a17-gapps.img system-a17-nogapps.img
           sha256sum *.img.xz | tee SHA256SUMS.txt
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          experimental = '${{ inputs.experimental_graphics }}' == 'true'
+          Path('build-receipt.json').write_text(json.dumps({
+              'source_commit': os.environ['GITHUB_SHA'], 'actions_run': os.environ['GITHUB_RUN_ID'],
+              'gsi_build': os.environ['GSI_BUILD'], 'gsi_sha256': os.environ['GSI_ZIP_SHA256'],
+              'device': 'TB-X606V', 'system_bytes': 4085252096, 'experimental_graphics': experimental,
+              'graphics_acceptance': False, 'device_validation': False,
+              'scope': 'Build only; no tablet write/reboot; static/mechanical guards are not runtime proof'
+          }, indent=2) + '\n')
+          PY
 
       - uses: actions/upload-artifact@v7
         if: inputs.mode != 'check'
@@ -188,6 +251,8 @@ jobs:
           path: |
             system-a17-tb-x606v-*.img.xz
             SHA256SUMS.txt
+            build-receipt.json
+            graphics-*.json
           retention-days: 14
           compression-level: 0
 
