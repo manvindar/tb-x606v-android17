@@ -36,6 +36,8 @@ class ImageWrites(unittest.TestCase):
         f = self.root/'good';f.write_bytes(b'verified bytes')
         self.write(f, f)
         self.assertEqual({}, self.ns['readback_sources'])
+        self.assertTrue((self.root/'debugfs-test.img.stdout.log').exists())
+        self.assertTrue((self.root/'debugfs-test.img.stderr.log').exists())
 
     def test_empty_written_file_passes(self):
         f = self.root/'empty';f.write_bytes(b'')
