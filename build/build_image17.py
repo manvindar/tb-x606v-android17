@@ -344,6 +344,11 @@ run('sh', os.path.join(TOOLS, 'vibrator', 'build.sh'), env=dict(os.environ, ANDR
 put(os.path.join(TOOLS, 'vibrator', 'out', 'vibratorshim.jar'), '/system/etc/vibratorshim.jar', '644')
 put(os.path.join(TOOLS, 'vibrator', 'vibratorshim.sh'), '/system/bin/vibratorshim.sh', '755')
 put(os.path.join(TOOLS, 'vibrator', 'vibratorshim.rc'), '/system/etc/init/vibratorshim.rc', '644')
+# Optional Beta4 CPU statistics collector needs capabilities absent on kernel 4.9.
+if exists(S, '/system/etc/init/cpustatsd.rc'):
+    rc = cat(S, '/system/etc/init/cpustatsd.rc').decode()
+    assert '    capabilities BPF SYS_NICE PERFMON\n' in rc and rc.count('    start cpustatsd\n') == 2
+    replace(S, '/system/etc/init/cpustatsd.rc', tmpf('cpustatsd.rc', rc.replace('    start cpustatsd\n', '    # Kernel 4.9 lacks BPF/PERFMON ambient capabilities; keep this optional collector disabled.\n')))
 # init.rc starts the UART console on debuggable builds and ActivityManager then warns "Serial console enabled, performance is impacted" every boot
 rc = cat(S, '/system/etc/init/hw/init.rc').decode(); old = 'on init && property:ro.debuggable=1\n    start console\n'; assert old in rc
 replace(S, '/system/etc/init/hw/init.rc', tmpf('init.rc', rc.replace(old, '# console shell on the UART only when asked (ROM Tuner: Serial console). ActivityManager shows a performance warning whenever init.svc.console is running.\n'
