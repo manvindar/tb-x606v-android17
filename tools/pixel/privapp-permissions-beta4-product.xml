@@ -1,0 +1,27 @@
+<permissions>
+    <!--Explicit missing requested permissions measured in matching DP11.261030.003 factory apps, run43843710637.-->
+    <privapp-permissions package="com.google.android.deskclock">
+        <permission name="android.permission.CONTROL_DISPLAY_COLOR_TRANSFORMS" />
+        <permission name="android.permission.QUERY_USERS" />
+        <permission name="android.permission.READ_HOME_TIME_ZONE" />
+        <permission name="android.permission.SCHEDULE_EXACT_ALARM" />
+        <permission name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    </privapp-permissions>
+    <privapp-permissions package="com.android.deskclock">
+        <permission name="android.permission.CONTROL_DISPLAY_COLOR_TRANSFORMS" />
+        <permission name="android.permission.QUERY_USERS" />
+        <permission name="android.permission.READ_HOME_TIME_ZONE" />
+        <permission name="android.permission.SCHEDULE_EXACT_ALARM" />
+        <permission name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    </privapp-permissions>
+    <privapp-permissions package="com.android.alarmclock">
+        <permission name="android.permission.CONTROL_DISPLAY_COLOR_TRANSFORMS" />
+        <permission name="android.permission.QUERY_USERS" />
+        <permission name="android.permission.READ_HOME_TIME_ZONE" />
+        <permission name="android.permission.SCHEDULE_EXACT_ALARM" />
+        <permission name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    </privapp-permissions>
+    <privapp-permissions package="com.google.android.googlequicksearchbox">
+        <permission name="android.permission.INTERACT_ACROSS_USERS" />
+    </privapp-permissions>
+</permissions>

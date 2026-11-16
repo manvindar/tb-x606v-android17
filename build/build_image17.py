@@ -436,6 +436,10 @@ if a.pixel_tablet:
     allow_xmls.append(os.path.join(TOOLS, 'pixel', 'privapp-permissions-pixeltablet-a17.xml') + ':system_ext')
     allow_xmls += [os.path.join(st, f) + ':product' for f in staged if f.startswith('product/etc/permissions/') and f.endswith('.xml')]
     priv_apks += [os.path.join(st, f) + (':system_ext' if f.startswith('system_ext/') else ':product') for f in staged if '/priv-app/' in f and f.endswith('.apk')]
+    for part in ('product', 'system_ext'):
+        extra = os.path.join(TOOLS, 'pixel', 'privapp-permissions-beta4-' + part + '.xml')
+        put(extra, '/system/' + part + '/etc/permissions/' + os.path.basename(extra), '644')
+        allow_xmls.append(extra + ':' + part)
     # Pixel boot animation: the default slot of ROM Tuner ("gemini") and the plain file
     for pz, dsts in (('product/media/bootanimation-pixel.zip', ('bootanimation.zip', 'bootanimation-gemini.zip')), ('product/media/bootanimation-pixel-dark.zip', ('bootanimation-dark.zip',))):
         fitted = wp(os.path.basename(pz)); py(os.path.join('pixel', 'fit_bootanimation.py'), os.path.join(st, pz), fitted)    # canvas 2560x1600 -> this panel (1200x1920), see the script

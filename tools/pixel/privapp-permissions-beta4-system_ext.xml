@@ -1,0 +1,39 @@
+<permissions>
+    <!--Explicit missing requested permissions measured in matching DP11.261030.003 factory apps, run43843710637.-->
+    <privapp-permissions package="com.google.android.apps.nexuslauncher">
+        <permission name="com.android.systemui.permission.LAUNCH_ACCESSIBILITY_SHORTCUT_CHOOSER_DIALOG" />
+    </privapp-permissions>
+    <privapp-permissions package="com.android.settings">
+        <permission name="android.permission.CUSTOMIZE_SYSTEM_UI" />
+    </privapp-permissions>
+    <privapp-permissions package="com.google.android.pixel.setupwizard">
+        <permission name="android.permission.CHANGE_CONFIGURATION" />
+        <permission name="android.permission.CHANGE_OVERLAY_PACKAGES" />
+        <permission name="android.permission.DISPATCH_PROVISIONING_MESSAGE" />
+        <permission name="android.permission.GET_ACCOUNTS_PRIVILEGED" />
+        <permission name="android.permission.INTERACT_ACROSS_USERS" />
+        <permission name="android.permission.MANAGE_USERS" />
+        <permission name="android.permission.NOTIFICATION_DURING_SETUP" />
+        <permission name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
+        <permission name="android.permission.REBOOT" />
+        <permission name="android.permission.SCHEDULE_EXACT_ALARM" />
+        <permission name="android.permission.SHUTDOWN" />
+        <permission name="android.permission.START_ACTIVITIES_FROM_BACKGROUND" />
+        <permission name="android.permission.STATUS_BAR" />
+        <permission name="android.permission.WRITE_SECURE_SETTINGS" />
+    </privapp-permissions>
+    <privapp-permissions package="com.android.systemui">
+        <permission name="com.android.systemui.permission.LAUNCH_ACCESSIBILITY_SHORTCUT_CHOOSER_DIALOG" />
+    </privapp-permissions>
+    <privapp-permissions package="com.google.android.apps.wallpaper">
+        <permission name="android.permission.BIND_WALLPAPER" />
+        <permission name="android.permission.CHANGE_OVERLAY_PACKAGES" />
+        <permission name="android.permission.CUSTOMIZE_SYSTEM_UI" />
+        <permission name="android.permission.MODIFY_DAY_NIGHT_MODE" />
+        <permission name="android.permission.READ_WALLPAPER_INTERNAL" />
+        <permission name="android.permission.SET_WALLPAPER_COMPONENT" />
+        <permission name="android.permission.SET_WALLPAPER_DIM_AMOUNT" />
+        <permission name="android.permission.UPDATE_THEME_SETTINGS" />
+        <permission name="android.permission.WRITE_SECURE_SETTINGS" />
+    </privapp-permissions>
+</permissions>
