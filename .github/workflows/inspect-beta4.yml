@@ -1,0 +1,41 @@
+name: Inspect pinned Lenovo Beta 4 patch inputs
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GSI_SHA: 1cb1c5254299581246ba626faccd41566df25382cd0415d8b82bf2e2d80cbf6c
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: '3.12' }
+      - name: Install extraction tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y e2fsprogs unzip
+          pip install capstone
+      - uses: actions/cache/restore@v6
+        with:
+          path: gsi.zip
+          key: gsi-${{ env.GSI_SHA }}
+      - name: Verify and unpack exact Beta 4 input
+        run: |
+          if [ ! -f gsi.zip ]; then
+            curl -L --fail --retry 3 -o gsi.zip 'https://dl.google.com/developers/android/cinnamonbun/images/gsi/aosp_arm64-exp-DP11.261030.003-16847878-1cb1c525.zip'
+          fi
+          echo "$GSI_SHA  gsi.zip" | sha256sum -c -
+          unzip -q gsi.zip system.img
+      - name: Retain inputs and report all patch failures
+        run: |
+          python build/check_patches.py system.img --evidence-out evidence
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lenovo-beta4-patch-inputs
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14
