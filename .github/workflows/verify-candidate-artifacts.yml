@@ -1,0 +1,87 @@
+name: Verify uploaded tablet candidate bytes
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run:
+        description: Completed unpublished Build image run
+        required: true
+      candidate_source:
+        description: Exact full source commit of that run
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CANDIDATE_RUN: ${{ inputs.candidate_run }}
+      CANDIDATE_SOURCE: ${{ inputs.candidate_source }}
+    steps:
+      - name: Check completed exact build identity
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > run.json
+          python3 - <<'PY'
+          import json, os
+          r = json.load(open('run.json'))
+          assert r['status'] == 'completed' and r['conclusion'] == 'success'
+          assert r['head_sha'] == os.environ['CANDIDATE_SOURCE']
+          assert r['path'] == '.github/workflows/build-image.yml'
+          PY
+      - name: Retrieve the uploaded candidate
+        run: gh run download "$CANDIDATE_RUN" -R "$GITHUB_REPOSITORY" -n system-a17-tb-x606v-DP11.261030.003 -D candidate
+      - name: Verify every compressed and decompressed image byte
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, lzma, os
+          from pathlib import Path
+          root = Path('candidate')
+          build = json.loads((root / 'build-receipt.json').read_text())
+          assert build['source_commit'] == os.environ['CANDIDATE_SOURCE']
+          assert build['actions_run'] == os.environ['CANDIDATE_RUN']
+          assert build['device'] == 'TB-X606V' and build['system_bytes'] == 4085252096
+          assert build['experimental_graphics'] and build['graphics_acceptance'] is False
+          assert build['device_validation'] is False
+          checks = dict((name.lstrip('*'), sha) for sha, name in
+                        (line.split(maxsplit=1) for line in (root / 'SHA256SUMS.txt').read_text().splitlines()))
+          expected = {f'system-a17-tb-x606v-{flavor}-nodexopt.img.xz' for flavor in ('gapps', 'nogapps')}
+          assert set(checks) == expected
+          results = []
+          for flavor in ('gapps', 'nogapps'):
+              name = f'system-a17-tb-x606v-{flavor}-nodexopt.img.xz'
+              with (root / name).open('rb') as stream:
+                  packed_sha = hashlib.file_digest(stream, 'sha256').hexdigest()
+              assert packed_sha == checks[name], 'Compressed checksum mismatch: ' + name
+              graphics = json.loads((root / f'graphics-{flavor}.json').read_text())
+              assert graphics['status'] == 'experimental-mechanical-pass' and graphics['acceptance'] is False
+              assert not graphics['donor_failures'] and not graphics['consumer_failures'] and not graphics['flag_provider_consumers']
+              raw_hash = hashlib.sha256(); size = 0
+              with lzma.open(root / name, 'rb') as stream:
+                  for block in iter(lambda: stream.read(8 * 1024**2), b''):
+                      size += len(block); raw_hash.update(block)
+              assert size == 4085252096 and raw_hash.hexdigest() == graphics['image_sha256']
+              results.append({'file': name, 'compressed_sha256': packed_sha,
+                              'compressed_bytes': (root / name).stat().st_size,
+                              'raw_sha256': raw_hash.hexdigest(), 'raw_bytes': size,
+                              'unknown_graphics_callers': graphics['unreviewed_caller_count'],
+                              'graphics_acceptance': False})
+              print(flavor + ': full uploaded compressed/raw byte verification PASS', flush=True)
+          Path('artifact-verification.json').write_text(json.dumps({
+              'candidate_run': os.environ['CANDIDATE_RUN'],
+              'source_commit': os.environ['CANDIDATE_SOURCE'],
+              'status': 'complete-uploaded-artifact-hash-pass', 'images': results,
+              'device_actions': False, 'device_validation': False,
+          }, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tablet-candidate-byte-verification
+          path: |
+            artifact-verification.json
+            run.json
+            candidate/SHA256SUMS.txt
+            candidate/build-receipt.json
+          if-no-files-found: error
