@@ -83,11 +83,12 @@ def attrs(img, path):
 def exists(img, path): return b'Inode:' in dbg(img, 'stat', path).stdout
 
 # --- ext4 edit list (debugfs -w -f) ---------------------------------------------------------------------------------------
-cmds = []; lbl = {}
+cmds = []; lbl = {}; readback_sources = {}
 def label_file(ctx):
     if ctx not in lbl: lbl[ctx] = tmpf('label%d' % len(lbl), ctx.encode() + b'\0')
     return lbl[ctx]
 def put(src, dst, mode, uid=0, gid=0, ctx=SYS):
+    readback_sources[dst] = src
     cmds.extend([f'rm {dst}', f'write {src} {dst}', f'set_inode_field {dst} mode 0100{mode}', f'set_inode_field {dst} uid {uid}',
                  f'set_inode_field {dst} gid {gid}', f'ea_set -f {label_file(ctx)} {dst} security.selinux'])
 def replace(img, dst, src):
@@ -99,13 +100,19 @@ def mkdir(path, mode='755', ctx=SYS):
 def symlink(path, target, ctx=LIB):
     cmds.extend([f'rm {path}', f'symlink {path} {target}', f'ea_set -f {label_file(ctx)} {path} security.selinux'])
 def apply(img):
-    global cmds
+    global cmds, readback_sources
     f = tmpf('cmds', '\n'.join(cmds) + '\n'); cmds = []
     out = subprocess.run([os.path.join(E2, 'debugfs'), '-w', '-f', f, img], capture_output=True, text=True)
-    bad = [l for l in (out.stdout + out.stderr).split('\n') if re.search(r'(?i)(error|not found|no such|not enough|no space)', l) and not l.startswith('debugfs: rm ')]
+    bad = [l for l in (out.stdout + out.stderr).split('\n') if re.search(r'(?i)(error|not found|no such|not enough|no space|could not allocate|short write)', l) and not l.startswith('debugfs: rm ')]
     # `rm` of a path that does not exist yet prints "File not found by ext2_lookup": expected
     bad = [l for l in bad if 'File not found by ext2_lookup' not in l]
     if bad: sys.exit('debugfs reported:\n' + '\n'.join(bad[:20]))
+    for dst, src in readback_sources.items():
+        expected = hashlib.sha256(open(src, 'rb').read()).hexdigest()
+        actual = hashlib.sha256(cat(img, dst)).hexdigest()
+        if actual != expected: sys.exit('Written file readback mismatch: ' + dst)
+    print('  exact written-file readback:', len(readback_sources), 'files')
+    readback_sources = {}
     run(os.path.join(E2, 'e2fsck'), '-fn', img)
 
 def apex_member(img, apex, inner, dst):
@@ -424,6 +431,19 @@ if a.pixel_tablet:
     new = [f for f in staged if f not in ('system_ext/priv-app/SystemUI/SystemUI.apk', 'system_ext/priv-app/Settings/Settings.apk')]
     ensure_dirs('/system/' + f for f in new)
     for f in new: put(os.path.join(st, f), '/system/' + f, '644', 0, 0, LIB if '/lib64/' in f else SYS)
+    # Keep providers and the recents launcher; remove only base APKs replaced by staged Google apps.
+    replacements = {
+        '/system/product/priv-app/Contacts/Contacts.apk': 'product/app/GoogleContacts',
+        '/system/product/app/Calendar/Calendar.apk': 'product/app/CalendarGooglePrebuilt',
+        '/system/product/app/DeskClock/DeskClock.apk': 'product/priv-app/PrebuiltDeskClockGoogle',
+        '/system/product/app/Gallery2/Gallery2.apk': 'product/app/Photos',
+        '/system/product/priv-app/SettingsIntelligence/SettingsIntelligence.apk': 'product/priv-app/SettingsIntelligenceGooglePrebuilt',
+        '/system/system_ext/priv-app/ThemePicker/ThemePicker.apk': 'system_ext/priv-app/WallpaperPickerGoogleRelease',
+        '/system/product/app/QuickSearchBox/QuickSearchBox.apk': 'product/priv-app/Velvet',
+    }
+    for old, replacement in replacements.items():
+        assert any(f.startswith(replacement + '/') and f.endswith('.apk') for f in staged), replacement
+        if exists(S, old): cmds.append('rm ' + old)
     # Device Health Services: TurboAdapter's JNI lib lives in system_ext/lib64, the app links it from its own lib/arm64 as on the Pixel
     if 'system_ext/lib64/libpowerstatshaldataprovider.so' in staged:
         mkdir('/system/system_ext/priv-app/TurboAdapter/lib'); mkdir('/system/system_ext/priv-app/TurboAdapter/lib/arm64')
