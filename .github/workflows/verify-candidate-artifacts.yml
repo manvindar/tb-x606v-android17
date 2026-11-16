@@ -81,6 +81,15 @@ jobs:
                   assert r.stdout, 'Missing/empty content: ' + path
                   contents.append({'path': path, 'bytes': len(r.stdout), 'sha256': hashlib.sha256(r.stdout).hexdigest()})
                   return r.stdout
+              if '${{ inputs.publish_nonpixel }}' == 'true':
+                  for path in ('/system/system_ext/priv-app/SystemUI/SystemUI.apk',
+                               '/system/system_ext/priv-app/Settings/Settings.apk'):
+                      with zipfile.ZipFile(io.BytesIO(read_image(path))) as apk:
+                          assert 'AndroidManifest.xml' in apk.namelist() and apk.testzip() is None
+                  for path in ('/system/system_ext/priv-app/NexusLauncherRelease/NexusLauncherRelease.apk',
+                               '/system/bin/pixel_home.sh', '/system/etc/init/zz_pixel_home.rc'):
+                      r = subprocess.run(['debugfs', '-R', 'stat ' + path, str(raw_path)], capture_output=True, check=True)
+                      assert 'File not found' in r.stderr.decode(), 'Unexpected Pixel content: ' + path
               if build.get('full_pixel'):
                   for path in ('/system/system_ext/priv-app/SystemUI/SystemUI.apk',
                                '/system/system_ext/priv-app/Settings/Settings.apk',
@@ -101,7 +110,9 @@ jobs:
                               'compressed_bytes': (root / name).stat().st_size,
                               'raw_sha256': raw_hash.hexdigest(), 'raw_bytes': size,
                               'unknown_graphics_callers': graphics['unreviewed_caller_count'],
-                              'graphics_acceptance': False, 'full_pixel_content': contents})
+                              'graphics_acceptance': False,
+                              'full_pixel_content': contents if build.get('full_pixel') else [],
+                              'nonpixel_content': contents if not build.get('full_pixel') else []})
               print(flavor + ': full uploaded compressed/raw byte verification PASS', flush=True)
           Path('artifact-verification.json').write_text(json.dumps({
               'candidate_run': os.environ['CANDIDATE_RUN'],
