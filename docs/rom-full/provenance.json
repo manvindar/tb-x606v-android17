@@ -1,0 +1,12 @@
+{
+ "kit_commit": "ec988ec22c784688599f28473f6e0e741181ba39",
+ "actions_run": "44383296067",
+ "builder_commit": "85b11cde32d5cbe7f8c9d6ec8a12d9b913421e76",
+ "port_commit": "8523f50a3be4ea4ad5482e0a937c7dcd8a664fd5",
+ "gsi_build": "DP11.261030.003",
+ "gsi_sha256": "1cb1c5254299581246ba626faccd41566df25382cd0415d8b82bf2e2d80cbf6c",
+ "kernel_reference_run": "44240302936 (r5b, commit 3b5a62c): Image.gz 96e6c5ce... boot-r5b 414060fe...",
+ "boot": "boot-candidate.img is CI-built and NOT run on a device; boot-r5b-PROVEN-recovery-reference.img is the image that booted on the unit",
+ "device_validation": false,
+ "notes": "builder release v17-qpr3-beta4-nonpixel-r1 inputs reproduced (experimental legacy graphics provider ON, no Pixel layer)"
+}

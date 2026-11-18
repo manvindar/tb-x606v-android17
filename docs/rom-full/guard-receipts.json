@@ -1,0 +1,157 @@
+{
+ "guard_exit_codes": {
+  "ac107-compare": 0,
+  "board-transplant": 0,
+  "config-gate": 3,
+  "export-accounting": 1,
+  "gpu113-assert": 0,
+  "gpu113-integrate": 0,
+  "lcm-registration": 0,
+  "panel-compare": 0,
+  "private-apply": 0,
+  "private-compare": 1,
+  "sensor-contract": 1
+ },
+ "export-accounting": {
+  "mismatch": 90,
+  "absent": 7,
+  "pinned_mismatch": 82,
+  "pinned_absent": 6,
+  "new_mismatch": [
+   "RGXHWPerfAcquireEvents",
+   "RGXHWPerfConfigureAndEnableCounters",
+   "RGXHWPerfConfigureAndEnableCustomCounters",
+   "RGXHWPerfConnect",
+   "RGXHWPerfControl",
+   "RGXHWPerfDisableCounters",
+   "RGXHWPerfDisconnect",
+   "RGXHWPerfReleaseEvents"
+  ],
+  "resolved_mismatch": [],
+  "crc_changed_within_mismatch": [],
+  "new_absent": [
+   "MTKSaveFrame"
+  ],
+  "resolved_absent": [],
+  "candidate_only_exports": 33,
+  "mismatch_by_class": {
+   "NEW": 8,
+   "drift_without_calibrated_after": 10,
+   "excluded_uncalibrated_charger": 54,
+   "predicted_power_supply_regression": 18
+  },
+  "unchanged": false
+ },
+ "config-gate": {
+  "changed": {},
+  "unexplained_dropped": {},
+  "listed_dropped": {
+   "CONFIG_TOUCHSCREEN_MTK_NT36523W": [
+    "blocked",
+    "touch:TOUCHSCREEN_MTK_NT36523W"
+   ]
+  },
+  "unexplained_added": {},
+  "neutral_added": {},
+  "status": "BLOCKED",
+  "open_blocked": [
+   "sensor:s5k4h7yxqtech1_mipi_raw",
+   "touch:TOUCHSCREEN_MTK_NT36523W"
+  ],
+  "summary": {
+   "changed": 0,
+   "unexplained_dropped": 0,
+   "listed_dropped": 1,
+   "unexplained_added": 0,
+   "neutral_added": 0,
+   "open_blocked": 2
+  }
+ },
+ "config-drift": {
+  "stock_sha256": "ed99dd817f6fae0a0414306bd8b786cc0324bc4fb91de72f0df7514d211fbc65",
+  "built_sha256": "0bf40ce90dcbfb39faaad13e3b957bcecbc818325c3daee009f92890def52db5",
+  "stock_symbols": 3868,
+  "built_symbols": 3864,
+  "changed": {},
+  "dropped": {
+   "CONFIG_TOUCHSCREEN_MTK_NT36523W": "y"
+  },
+  "added": {}
+ },
+ "dtbs-exit": {
+  "dtbs_exit": 2
+ },
+ "link-deviation": {
+  "status": "DEVIATION",
+  "removed_from_built_config": [
+   "s5k4h7yxqtech1_mipi_raw"
+  ],
+  "reason": "no source and only a partial recovery exists (recon-sensors/RECON-SENSORS.md); without a Makefile the sensor directory stops the link, which would hide every later link-level error. NT36523W has no code in the tree, so olddefconfig already dropped it (config gate lists it as blocked).",
+  "effect": "the resulting Image is NOT a stock-equivalent kernel and must never be flashed"
+ },
+ "build-exit": {
+  "image_gz_exit": 0
+ },
+ "gate": {
+  "release": "4.9.190+",
+  "kernel_vermagics": [
+   "4.9.190+ SMP preempt mod_unload modversions aarch64"
+  ],
+  "modules": {
+   "bt_drv": {
+    "imports": 56,
+    "failures": 0,
+    "first": []
+   },
+   "fmradio_drv": {
+    "imports": 81,
+    "failures": 0,
+    "first": []
+   },
+   "fpsgo": {
+    "imports": 29,
+    "failures": 0,
+    "first": []
+   },
+   "gps_drv": {
+    "imports": 64,
+    "failures": 0,
+    "first": []
+   },
+   "met": {
+    "imports": 147,
+    "failures": 0,
+    "first": []
+   },
+   "wlan_drv_gen4m": {
+    "imports": 263,
+    "failures": 0,
+    "first": []
+   },
+   "wmt_chrdev_wifi": {
+    "imports": 39,
+    "failures": 0,
+    "first": []
+   },
+   "wmt_drv": {
+    "imports": 247,
+    "failures": 0,
+    "first": []
+   }
+  },
+  "export_drift": 90,
+  "shipping_exports_absent": 7,
+  "strict_exports": false,
+  "problems": [],
+  "gate": "PASS",
+  "necessary_not_sufficient": true,
+  "remaining_gates": [
+   "DTB/appended-DTB vs retained carrier",
+   "board/peripheral source differences",
+   "GPU userspace/firmware pairing",
+   "guarded boot-only flash"
+  ]
+ },
+ "dtb_error": "make: No rule to make target 'arch/arm64/boot/dts/mediatek/achilles6_row_call.dtb' (dtbs_exit 2); the DTBs in boot-candidate.img are the pinned carrier's, not built here",
+ "status": "GUARDS FAILED: sensor-contract 1, config-gate 3, export-accounting 1, private-compare 1. Required guards are not passes; receipts are identical in kind to the r5b CI run 44240302936."
+}

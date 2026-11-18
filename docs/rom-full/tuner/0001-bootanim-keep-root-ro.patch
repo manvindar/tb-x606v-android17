@@ -1,0 +1,21 @@
+--- a/rom-tuner/device/tablet_tunerd.sh
++++ b/rom-tuner/device/tablet_tunerd.sh
+@@ -504,9 +504,15 @@
+ nav() { cmd overlay enable-exclusive --user 0 --category com.android.internal.systemui.navbar.$([ "$nav_mode" = threebutton ] && echo threebutton || echo gestural); }
+ anim() { for k in window_animation_scale transition_animation_scale animator_duration_scale; do settings put global $k $anim_scale; done; }
+ density_() { if [ "$density" = reset ]; then wm density reset; else wm density $density; fi; }
+-bootanim() {
+-  mount -o remount,rw / 2>/dev/null
+-  cmp -s $M/bootanimation-$bootanim.zip $M/bootanimation.zip || { cp $M/bootanimation-$bootanim.zip $M/bootanimation.zip; chmod 644 $M/bootanimation.zip; restorecon $M/bootanimation.zip; }
++rootmode() { awk '$2 == "/" {n = split($4, o, ","); m = o[1]} END {print m}' /proc/mounts; }   # ro or rw: the LAST mount entry of / controls
++bootanim() {   # keep / read-only unless a copy is needed: a writable / makes ART write dexopt output into the full system partition (SIGBUS, HAG-41)
++  cmp -s $M/bootanimation-$bootanim.zip $M/bootanimation.zip && return 0
++  was=$(rootmode)
++  if [ "$was" = ro ]; then mount -o remount,rw / || { log "bootanim: remount rw failed, nothing copied"; return 1; }; fi
++  cp $M/bootanimation-$bootanim.zip $M/bootanimation.zip; chmod 644 $M/bootanimation.zip; restorecon $M/bootanimation.zip; sync
++  if [ "$was" = ro ]; then
++    mount -o remount,ro /; [ "$(rootmode)" = ro ] || log "bootanim: / is still rw after remount ro"
++  fi
+ }
+ logging() {
+   if [ "$logging" = 1 ]; then setprop persist.log.tag ""; logcat -b all -G 1M
