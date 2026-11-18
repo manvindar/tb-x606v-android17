@@ -1,6 +1,6 @@
 # TB-X606V full-ROM CANDIDATE (prerelease): guard-failed kernel, NOT device-validated
 
-Lenovo TB-X606V (MT6765), Android 17 GSI. Built by GitHub Actions. **Nothing here was flashed or run on a tablet as a whole, and nothing is claimed flashing-ready.** CI overall conclusion was FAILURE: the kernel guards failed (below). Packaging was allowed only because the kernel receipts equal the earlier r5b CI run.
+Lenovo TB-X606V (MT6765), Android 17 GSI. Built by GitHub Actions. **Nothing here was flashed or run on a tablet as a whole, and nothing is claimed flashing-ready.** CI overall conclusion was FAILURE: the kernel guards failed (below). Packaging was allowed because the kernel config and symbol-table receipts equal the earlier r5b CI run; that is a packaging gate, not a validation.
 
 ## Read first
 1. **The kernel is a guard-failed, runtime-untested candidate.** It lives in `boot-candidate.img`, not in `system.img`.
@@ -27,7 +27,7 @@ Eleven guard exit codes exist. The workflow's "Require the guards" step checks n
 - Config gate BLOCKED: `s5k4h7yxqtech1_mipi_raw` (no source; removed from the build, so the link deviates from stock) and `TOUCHSCREEN_MTK_NT36523W` (no code in the tree, dropped).
 - Export accounting: 90 CRC differences and 7 absent exports against the shipping kernel. The pinned baseline was 82 and 6; the 8 `RGXHWPerf*` exports and `MTKSaveFrame` are new relative to that pin. `candidate_only_exports` 33.
 - DTB build step failed (`achilles6_row_call.dtb`, exit 2). The candidate's DTBs are the pinned carrier's.
-- These match the r5b CI run 44240302936 in kind. Matching does not turn a failed guard into a pass.
+- The same nine-step exit-code pattern appeared in the r5b CI run 44240302936. That is not equivalence: a matching exit-code pattern, kernel.config or Module.symvers does not show that the kernel behaves the same, or that any guard passes. Differences found: export accounting is 90/7 (above the pinned 82/6), `private-compare` fails, and Image.gz differs from r5b's with the cause unknown. This note supersedes any earlier "identical / no regression" summary.
 - `link-deviation.json`: the resulting Image is not stock-equivalent.
 
 ## Installation notes (information only)

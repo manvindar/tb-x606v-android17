@@ -153,5 +153,5 @@
   ]
  },
  "dtb_error": "make: No rule to make target 'arch/arm64/boot/dts/mediatek/achilles6_row_call.dtb' (dtbs_exit 2); the DTBs in boot-candidate.img are the pinned carrier's, not built here",
- "status": "GUARDS FAILED: sensor-contract 1, config-gate 3, export-accounting 1, private-compare 1. Required guards are not passes; receipts are identical in kind to the r5b CI run 44240302936."
+ "status": "GUARDS FAILED: sensor-contract 1, config-gate 3, export-accounting 1, private-compare 1. Required guards are not passes. The exit-code pattern matches r5b run 44240302936, which is NOT equivalence of kernel behaviour. Differences: export accounting 90 mismatches/7 absent vs pinned 82/6 (new: 8 RGXHWPerf*, MTKSaveFrame); Image.gz 6fd46760 differs from r5b Image.gz 96e6c5ce, cause unknown; DTB step failed."
 }
