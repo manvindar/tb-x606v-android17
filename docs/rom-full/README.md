@@ -20,6 +20,8 @@ Lenovo TB-X606V (MT6765), Android 17 GSI. Built by GitHub Actions. **Nothing her
 | `graphics-{gapps,nogapps}.json` | Builder graphics verification reports (CI runner paths redacted). `device_validation` is false. |
 | `provenance.json` | Source pins: kit, builder, port repo, GSI. |
 
+**Step-by-step TWRP flashing: `TWRP-FLASH.md`. Detailed kernel and ROM changelog: `CHANGELOG.md`.**
+
 ## Guard failures (kept, not hidden)
 Eleven guard exit codes exist. The workflow's "Require the guards" step checks nine; `private-apply` (0) and `private-compare` (1) are recorded alongside.
 - Exit 0: ac107-compare, board-transplant, gpu113-assert, gpu113-integrate, lcm-registration, panel-compare, private-apply.
