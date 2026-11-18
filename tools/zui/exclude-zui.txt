@@ -1,0 +1,80 @@
+# Left out of the TB-X606V ZUI system image (output layout paths). Reason per group.
+# preinstalled third-party apps
+/system/preinstall
+# Google apps (nogapps edition; the gapps edition adds MindTheGapps like the GSI build)
+/system/product/app
+/system/product/priv-app
+# Motorola Ready For assets
+/system/product/etc/motorola
+# AI, pen, retail demo, Qualcomm camera, games, OTA, diagnostics: hardware or services the tablet lacks
+/system/priv-app/ZUIEpos
+/system/priv-app/AigcService
+/system/priv-app/PenService
+/system/priv-app/PenSDK
+/system/priv-app/ZuiCamera
+/system/priv-app/ZuiCameraQR
+/system/priv-app/ZuiAILens
+/system/priv-app/ZuiAIService
+/system/priv-app/ZuiAIAssistant
+/system/priv-app/ZuiGameHelper
+/system/priv-app/LeVoiceCaptionApp
+/system/priv-app/EngineeringCode
+/system/priv-app/YouzoOffice
+/system/priv-app/ZuiWritingTools
+/system/priv-app/TabletVantage
+/system/priv-app/VantateResources
+/system/priv-app/UDSEngine
+/system/priv-app/AppCloud
+/system/priv-app/LenovoOTA
+/system/priv-app/ZuiLauncherPC
+# Qualcomm-only apps (IMS/RCS/UCE, Wi-Fi/Wigig, display colour, DDS, XR, aptX, Miracast/WFD, workload classifier,
+# satellite): need Qualcomm vendor HALs the MT6765 vendor does not have. uceShimService also needs absent libraries.
+/system/system_ext/app/ImsDataChannelService
+/system/system_ext/app/ImsRcsService
+/system/system_ext/app/uceShimService
+/system/system_ext/app/DynamicDDSService
+/system/system_ext/app/QCC
+/system/system_ext/app/QColor
+/system/system_ext/app/colorservice
+/system/system_ext/app/workloadclassifier
+/system/system_ext/app/WigigTetheringRRO
+/system/system_ext/app/aptxacu
+/system/system_ext/app/NtnSatApp
+/system/system_ext/priv-app/com.qualcomm.qti.services.systemhelper
+/system/system_ext/priv-app/QtiWifiService
+/system/system_ext/priv-app/WfdService
+/system/system_ext/priv-app/Xpan
+/system/system_ext/priv-app/xrcbservice
+/system/system_ext/priv-app/xrvdservice
+/system/system_ext/priv-app/xrwifiservice
+/system/system_ext/priv-app/aptxals
+/system/system_ext/priv-app/aptxui
+/system/system_ext/priv-app/QAS_DVC_MSP
+# Dolby needs the Dolby vendor service (the GSI build adds Dolby only from the user's own firmware, --dolby)
+/system/system_ext/priv-app/daxService
+/system/app/DolbyVisionService
+# Qualcomm/Motorola system_ext daemons and their init scripts (Miracast HAL, IMS video, perf HAL client,
+# QS guard, XR aux, Motorola test command daemon, QCC sys HAL, WFD). omservice stays: ZUI OneModeManager uses it.
+/system/system_ext/etc/init/com.qualcomm.qti.sigma_miracast@1.0-service.rc
+/system/system_ext/etc/init/com.qualcomm.qti.sigma_miracast_aidl-service.rc
+/system/system_ext/bin/sigma_miracasthalservice
+/system/system_ext/bin/sigma_miracasthalservice64
+/system/system_ext/bin/sigma_miracasthalservice_aidl
+/system/system_ext/etc/init/imsvtdaemon.rc
+/system/system_ext/bin/imsvtdaemon
+/system/system_ext/etc/init/perfservice.rc
+/system/system_ext/bin/perfservice
+/system/system_ext/etc/init/qsguard.rc
+/system/system_ext/bin/qsguard
+/system/system_ext/etc/init/qspa_system.rc
+/system/system_ext/etc/init/sxrauxd_ext.rc
+/system/system_ext/bin/qxrsplitauxservice
+/system/system_ext/etc/init/tcmd.rc
+/system/system_ext/bin/tcmd
+/system/system_ext/etc/init/vendor.qti.hardware.qccsyshal@1.2-service.rc
+/system/system_ext/bin/qccsyshal@1.2-service
+/system/system_ext/etc/init/vendor.qti.qccsyshal_aidl-service.rc
+/system/system_ext/bin/qccsyshal_aidl-service
+/system/system_ext/etc/init/wfdservice.rc
+/system/system_ext/bin/wfdservice
+/system/system_ext/bin/wfdservice64

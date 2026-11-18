@@ -38,6 +38,7 @@ ap.add_argument('--pixel', help='NikGapps-full-arm64-16-*.zip: source of the Pix
 ap.add_argument('--pixel-launcher-apk', help='Pixel Launcher built by tools/pixel/build_pixel_launcher.sh')
 ap.add_argument('--e2fs', help='directory with debugfs, e2fsck, resize2fs, mke2fs (default: found on PATH, /sbin, Homebrew)')
 ap.add_argument('--build-tools', help='Android SDK build-tools directory (zipalign, apksigner, d8); default $ANDROID_HOME/build-tools/<newest>')
+ap.add_argument('--rt32-from', help='image whose runtime APEX supplies 32-bit bionic (lib/, bin/linker) when the system runtime APEX is 64-bit only (ZUI device build)')
 ap.add_argument('--workdir'); ap.add_argument('--keep-work', action='store_true')
 a = ap.parse_args()
 if bool(a.pixel) != bool(a.pixel_launcher_apk): sys.exit('--pixel and --pixel-launcher-apk go together')
@@ -199,11 +200,16 @@ services_loc = wp('services.loc.p'); py('framework/patch_location_provider.py', 
 libc64 = patched('libc/patch_libc.py', '/system/lib64/bootstrap/libc.so', 'libc64'); libc32 = patched('libc/patch_libc.py', '/system/lib/bootstrap/libc.so', 'libc32')
 ld64 = patched('libc/patch_libc.py', '/system/bin/bootstrap/linker64', 'linker64'); ld32 = patched('libc/patch_libc.py', '/system/bin/bootstrap/linker', 'linker32')
 for path, f in (('/system/lib64/bootstrap/libc.so', libc64), ('/system/lib/bootstrap/libc.so', libc32), ('/system/bin/bootstrap/linker64', ld64), ('/system/bin/bootstrap/linker', ld32),
-                ('/system/lib64/libui.so', patched('libc/patch_libui.py', '/system/lib64/libui.so', 'ui64')), ('/system/lib/libui.so', patched('libc/patch_libui.py', '/system/lib/libui.so', 'ui32')),
+                ('/system/lib64/libui.so', patched('libc/patch_libui.py', '/system/lib64/libui.so', 'ui64')),
+                # --rt32-from: the 32-bit userspace (copied from the GSI) only serves vendor processes, which take libui from VNDK 29; the system has
+                # no 32-bit zygote, so no 32-bit system process loads /system/lib/libui.so and it stays unpatched
+                *([] if a.rt32_from else [('/system/lib/libui.so', patched('libc/patch_libui.py', '/system/lib/libui.so', 'ui32'))]),
                 ('/system/lib64/libprocessgroup_setup.so', patched('libc/patch_pgsetup.py', '/system/lib64/libprocessgroup_setup.so', 'pgsetup')),
                 ('/system/lib64/libmeminfo.so', patched('libc/patch_libmeminfo.py', '/system/lib64/libmeminfo.so', 'meminfo')),
                 ('/system/lib64/libbinder.so', patched('libc/patch_libbinder.py', '/system/lib64/libbinder.so', 'binder')),
-                ('/system/lib64/libandroid_runtime.so', patched('libc/patch_libandroid_runtime.py', '/system/lib64/libandroid_runtime.so', 'androidrt')),
+                # the memory-budget watchers exist only in builds with MemoryBudgetManager (the DP11 GSIs); a build without them needs no workaround
+                *([('/system/lib64/libandroid_runtime.so', patched('libc/patch_libandroid_runtime.py', '/system/lib64/libandroid_runtime.so', 'androidrt'))]
+                  if b'BudgetWatcher' in cat(S, '/system/lib64/libandroid_runtime.so') else []),
                 ('/system/framework/services.jar', services_loc)):
     replace(S, path, f)
 if a.legacy_graphics:
@@ -216,7 +222,47 @@ if a.legacy_graphics:
 # the runtime APEX carries its own copies of libc and the linkers (apps and the bionic namespace use them)
 open(wp('rt.apex'), 'wb').write(cat(S, '/system/apex/com.android.runtime.apex'))
 repl = []
-for inner, name in (('/lib64/bionic/libc.so', 'rtlibc64'), ('/lib/bionic/libc.so', 'rtlibc32'), ('/bin/linker64', 'rtlinker64'), ('/bin/linker', 'rtlinker32')):
+def payload_files(apex_bytes, sub):
+    # (path, is_dir) under sub inside an APEX's ext4 payload
+    d = tempfile.mkdtemp(dir=W); open(d + '/a.apex', 'wb').write(apex_bytes)
+    with zipfile.ZipFile(d + '/a.apex') as z: open(d + '/p.img', 'wb').write(z.read('apex_payload.img'))
+    out, level = [], [sub]
+    while level:
+        nxt = []
+        for q in level:
+            for l in dbg(d + '/p.img', 'ls', '-p', q).stdout.decode('latin1').splitlines():
+                f = l.split('/')
+                if len(f) < 7 or f[5] in ('.', '..', ''): continue
+                isdir = int(f[2], 8) & 0o170000 == 0o040000; out.append((q.rstrip('/') + '/' + f[5], 'dir' if isdir else 'lnk' if int(f[2], 8) & 0o170000 == 0o120000 else 'reg'))
+                if isdir: nxt.append(q.rstrip('/') + '/' + f[5])
+        level = nxt
+    return d + '/p.img', out
+members = (('/lib64/bionic/libc.so', 'rtlibc64'), ('/bin/linker64', 'rtlinker64'))
+_, own = payload_files(open(wp('rt.apex'), 'rb').read(), '/lib')
+_, own64 = payload_files(open(wp('rt.apex'), 'rb').read(), '/lib64'); own64 = {p for p, _ in own64}
+if any(p == '/lib/bionic/libc.so' for p, _ in own):
+    members += (('/lib/bionic/libc.so', 'rtlibc32'), ('/bin/linker', 'rtlinker32'))
+else:
+    if not a.rt32_from: sys.exit('the runtime APEX has no 32-bit bionic: pass --rt32-from with an image whose runtime APEX has it (the pinned GSI)')
+    gsi_rt = cat(a.rt32_from, '/system/apex/com.android.runtime.apex')
+    gpay, gfiles = payload_files(gsi_rt, '/lib')
+    for path, kind in gfiles + [('/bin/linker', 'reg'), ('/bin/crash_dump32', 'reg')]:
+        if kind == 'dir': continue
+        if kind == 'lnk':
+            tgt = re.search(r'Fast link dest: "([^"]*)"', dbg(gpay, 'stat', path).stdout.decode('latin1')).group(1)
+            r64 = path.replace('/lib/', '/lib64/', 1)
+            repl.append(f'+{path}=->{tgt}@' + (r64 if r64 in own64 else '/lib64/bionic/libc.so')); continue
+        local = wp('rt32' + path.replace('/', '_'))
+        r = subprocess.run([os.path.join(E2, 'debugfs'), '-R', f'dump {path} {local}', gpay], capture_output=True)
+        assert os.path.getsize(local) > 0, path
+        if path in ('/lib/bionic/libc.so', '/bin/linker'):
+            py('libc/patch_libc.py', local, local + '.p'); local += '.p'
+        ref = {'/bin/linker': '/bin/linker64', '/bin/crash_dump32': '/bin/crash_dump64'}.get(path, path.replace('/lib/', '/lib64/', 1))
+        if ref.startswith('/lib64/') and ref not in own64:
+            ref = '/lib64/bionic/libc.so'     # label source: a 64-bit file of the same kind in this (system) runtime APEX
+        repl.append(f'+{path}={local}@{ref}')
+    print('  runtime APEX: 32-bit bionic from', a.rt32_from, len(repl), 'files')
+for inner, name in members:
     apex_member(S, '/system/apex/com.android.runtime.apex', inner, wp(name + '.orig')); py('libc/patch_libc.py', wp(name + '.orig'), wp(name + '.p')); repl.append(f'{inner}={wp(name + ".p")}')
 py('apex/repack_apex.py', wp('rt.apex'), wp('rt.new.apex'), KEY, *repl, env=APEX_ENV)
 replace(S, '/system/apex/com.android.runtime.apex', wp('rt.new.apex'))
@@ -264,7 +310,16 @@ else:
 # 6 tethering / bluetooth / swcodec ------------------------------------------------------------------------------------
 print('6 bpf and friends')
 mkdir('/system/etc/bpf.a17')
-T = 'com.android.tethering.capex'; A = '/system/apex/'
+A = '/system/apex/'
+def apex_file(*names):
+    # AOSP GSIs ship com.android.X.capex; Google-signed device builds (Lenovo ZUI) ship com.google.android.X_compressed.apex. The mount
+    # point (/apex/com.android.X) is the same, so the patched copies bind-mount over either.
+    hits = [n for n in names if exists(S, A + n)]
+    assert hits, ('none of these APEX files exists', names)
+    return hits[0]
+T = apex_file('com.android.tethering.capex', 'com.google.android.tethering_compressed.apex', 'com.google.android.tethering.apex')
+SW = apex_file('com.android.media.swcodec.capex', 'com.google.android.media.swcodec_compressed.apex', 'com.google.android.media.swcodec.apex')
+BT = apex_file('com.android.bt.capex', 'com.google.android.bt_compressed.apex', 'com.google.android.bt.apex')
 nb = wp('netbpfload.orig'); apex_member(S, A + T, '/bin/netbpfload', nb); py('bpf/patch_binaries.py', 'netbpfload', nb, wp('netbpfload.a17'))
 put(wp('netbpfload.a17'), '/system/bin/netbpfload.a17', '755', 0, 2000, 'u:object_r:bpfloader_exec:s0')
 # the tracer starts netbpfload.a17 under ptrace (children are resumed, bpf.progs_loaded is set when it ends) and is what the bind mount puts in the apex
@@ -278,21 +333,21 @@ def bpf_file(name, apex, inner, tool, mode, ctx):
 bpf_file('libnetd_updatable.so', T, '/lib64/libnetd_updatable.so', lambda i, o: py('bpf/patch_binaries.py', 'netd_updatable', i, o), '644', LIB)
 bpf_file('libservice-connectivity.so', T, '/lib64/libservice-connectivity.so', lambda i, o: py('bpf/patch_binaries.py', 'service_connectivity', i, o), '644', LIB)
 bpf_file('service-connectivity.jar', T, '/javalib/service-connectivity.jar', lambda i, o: py('framework/patch_service_connectivity_jar.py', i, o), '644', SYS)
-bpf_file('libbluetooth_jni.so', 'com.android.bt.capex', '/lib64/libbluetooth_jni.so', lambda i, o: py('bpf/patch_bluetooth.py', i, o), '644', LIB)
+bpf_file('libbluetooth_jni.so', BT, '/lib64/libbluetooth_jni.so', lambda i, o: py('bpf/patch_bluetooth.py', i, o), '644', LIB)
 def codec_ui(original, output, directory):
     source = graphics_source('codec', directory, original) if a.legacy_graphics else original
     py('libc/patch_libui.py', source, output)
     if a.legacy_graphics: graphics_patched('codec', directory, output)
-bpf_file('libui_swcodec64.so', 'com.android.media.swcodec.capex', '/lib64/libui.so', lambda i, o: codec_ui(i, o, 'lib64'), '644', SYS)
-bpf_file('libui_swcodec32.so', 'com.android.media.swcodec.capex', '/lib/libui.so', lambda i, o: codec_ui(i, o, 'lib'), '644', SYS)
+bpf_file('libui_swcodec64.so', SW, '/lib64/libui.so', lambda i, o: codec_ui(i, o, 'lib64'), '644', SYS)
+bpf_file('libui_swcodec32.so', SW, '/lib/libui.so', lambda i, o: codec_ui(i, o, 'lib'), '644', SYS)
 if a.legacy_graphics:
-    original = tmpf('codec.original.capex', cat(S, A + 'com.android.media.swcodec.capex'))
+    original = tmpf('codec.original.capex', cat(S, A + SW))
     rebuilt = wp('codec.legacy.apex')
     run(sys.executable, os.path.join(TOOLS, 'graphics/repack_codec.py'), original, rebuilt,
         os.path.abspath(a.legacy_graphics), KEY, os.path.join(TOOLS, 'apex/avbtool.py'),
         wp('libui_swcodec64.so.p'), wp('libui_swcodec32.so.p'), env=APEX_ENV)
-    mode, uid, gid, context = attrs(S, A + 'com.android.media.swcodec.capex')
-    cmds.append('rm ' + A + 'com.android.media.swcodec.capex')
+    mode, uid, gid, context = attrs(S, A + SW)
+    cmds.append('rm ' + A + SW)
     put(rebuilt, A + 'com.android.media.swcodec.apex', mode, uid, gid, context)
 def netd(i, o): py('bpf/btfmaps.py', i, '--patch', wp('netd.btf.o')); py('bpf/patch_netd_o.py', wp('netd.btf.o'), o)       # LRU_HASH -> HASH in the BTF, then in .android_maps
 bpf_file('netd.o', T, '/etc/bpf/mainline/netd.o', netd, '644', SYS)

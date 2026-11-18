@@ -10,8 +10,16 @@ then fix the dex checksum + SHA-1 signature and rewrite the jar. Offsets are ass
 usage: patch_services_jar.py IN.jar OUT.jar"""
 import hashlib, re, struct, sys, zipfile, zlib
 src, dst = sys.argv[1:3]
-zin = zipfile.ZipFile(src); raw = bytearray(zin.read('classes.dex'))
-heads = [m.start() for m in re.finditer(rb'dex\n041\x00', raw)]
+zin = zipfile.ZipFile(src)
+# GSI: one classes.dex holding a dex 041 container (offsets absolute in the container). Device builds (e.g. Lenovo ZUI):
+# classes.dex, classes2.dex, ... each a standalone dex whose offsets count from its own start. Both are handled by
+# concatenating the files and adding the owning dex's start to every table offset of a non-041 dex.
+DEXN = sorted((n for n in zin.namelist() if re.fullmatch(r'classes\d*\.dex', n)), key=lambda n: int(n[7:-4] or 1))
+parts = [zin.read(n) for n in DEXN]
+raw = bytearray(b''.join(parts))
+starts = [sum(len(x) for x in parts[:i]) for i in range(len(parts))]
+heads = sorted({m.start() for m in re.finditer(rb'dex\n041\x00', raw)} | set(starts))
+def A(base, off): return off if raw[base + 4:base + 7] == b'041' else base + off
 # find the HintManagerService.<init>/getSupportInfo bytecode by its instruction pattern (so no hard-coded offsets)
 # The method/field/string/type indices change with every GSI build, so the patterns wildcard them (re.DOTALL, '..' = one 16-bit index) and the patches reuse the matched indices.
 def find1(pattern, what):
@@ -25,11 +33,11 @@ def _uleb(o):
         x = raw[o]; o += 1; v |= (x & 0x7f) << sh; sh += 7
         if not x & 0x80: return v, o
 def _str(base, i):
-    o = struct.unpack_from('<I', raw, struct.unpack_from('<I', raw, base + 0x3c)[0] + 4 * i)[0]; _, o = _uleb(o); return raw[o:raw.index(b'\0', o)].decode('latin1')
+    o = A(base, struct.unpack_from('<I', raw, A(base, struct.unpack_from('<I', raw, base + 0x3c)[0]) + 4 * i)[0]); _, o = _uleb(o); return raw[o:raw.index(b'\0', o)].decode('latin1')
 def method_name(pos, idx):
     base = max(x for x in heads if x <= pos)
-    c, _, n = struct.unpack_from('<HHI', raw, struct.unpack_from('<I', raw, base + 0x5c)[0] + 8 * idx)
-    ty = struct.unpack_from('<I', raw, struct.unpack_from('<I', raw, base + 0x44)[0] + 4 * c)[0]
+    c, _, n = struct.unpack_from('<HHI', raw, A(base, struct.unpack_from('<I', raw, base + 0x5c)[0]) + 8 * idx)
+    ty = struct.unpack_from('<I', raw, A(base, struct.unpack_from('<I', raw, base + 0x44)[0]) + 4 * c)[0]
     return _str(base, ty) + '.' + _str(base, n)
 def find_call(pattern, what, idx_at, wanted):
     ms = [m for m in re.finditer(pattern, raw, re.DOTALL) if method_name(m.start(), struct.unpack_from('<H', raw, m.start() + idx_at)[0]) == wanted]
@@ -63,10 +71,10 @@ def uleb(b, o):
         x = b[o]; o += 1; v |= (x & 0x7f) << s; s += 7
         if not x & 0x80: return v, o
 # dex 041 container: every offset in the header is absolute within classes.dex
-type_size, type_off = struct.unpack_from('<II', raw, base + 0x40); str_ids = struct.unpack_from('<I', raw, base + 0x3c)[0]
+type_size, type_off = struct.unpack_from('<II', raw, base + 0x40); type_off = A(base, type_off); str_ids = A(base, struct.unpack_from('<I', raw, base + 0x3c)[0])
 def tname(t):
     sidx = struct.unpack_from('<I', raw, type_off + 4 * t)[0]
-    o = struct.unpack_from('<I', raw, str_ids + 4 * sidx)[0]; _, o = uleb(raw, o)
+    o = A(base, struct.unpack_from('<I', raw, str_ids + 4 * sidx)[0]); _, o = uleb(raw, o)
     return bytes(raw[o:raw.index(b'\0', o)]).decode('latin1')
 cur, nxt = uleb(raw, tidx_off)
 assert tname(cur) == 'Landroid/os/RemoteException;', tname(cur)
@@ -90,8 +98,17 @@ assert raw[ins0 + 0x12 * 2:ins0 + 0x12 * 2 + 2] == bytes.fromhex('2200'), 'defau
 raw[h:h + 6] = bytes.fromhex('2900') + struct.pack('<h', 0x12 - hunit) + bytes.fromhex('0000')   # 2. goto/16 to the default-SupportInfo code at unit 0x12 ; nop (kills the orphaned const-string operand)
 # 3. BiometricCameraManagerImpl.subscribeToCameraEvents(): CameraManager.registerAvailabilityCallback throws on this device (the camera service cannot
 #    initialise its listener, Function not implemented) and BiometricService's handler thread takes system_server down. Make it a no-op.
-k = find_call(pat('5420', None, '5422', None, '1201', '6e30', None, '2001', '0e00'), 'camera pattern', 12, 'Landroid/hardware/camera2/CameraManager;.registerAvailabilityCallback').start()
-raw[k:k + 4] = bytes.fromhex('0e000000')                      # return-void ; nop (keeps the rest of the method valid)
+RAC = 'Landroid/hardware/camera2/CameraManager;.registerAvailabilityCallback'
+cam = [m for m in re.finditer(pat('5420', None, '5422', None, '1201', '6e30', None, '2001', '0e00'), raw, re.DOTALL)
+       if method_name(m.start(), struct.unpack_from('<H', raw, m.start() + 12)[0]) == RAC]
+if cam:
+    assert len(cam) == 1, ('camera pattern', len(cam)); k = cam[0].start()
+    raw[k:k + 4] = bytes.fromhex('0e000000')                  # return-void ; nop (keeps the rest of the method valid)
+else:
+    # device builds where the registration sits at the end of the constructor (Lenovo ZUI 18.5):
+    #   const/4 v1,0 ; invoke-virtual {v2,v0,v1} registerAvailabilityCallback ; return-void   -> the invoke becomes 3 nops
+    k = find_call(pat('1201', '6e30', None, '0201', '0e00'), 'camera pattern (constructor form)', 4, RAC).start()
+    raw[k + 2:k + 8] = b'\0' * 6
 # 4. ActivityTaskManagerService.LocalService.showSystemReadyErrorDialogsIfNeeded(): `Build.isBuildConsistent()` (Treble => VintfObject.verifyBuildAtBoot) is false
 #    for a GSI over this Android 10 vendor (sepolicy 29.0, VNDK 29, kernel 4.9), which shows "There's an internal problem with your device".
 #    Treat the build as consistent: const/4 v2,#1 ; nop x3 replaces `invoke-static {} isBuildConsistent ; move-result v2`.
@@ -105,7 +122,7 @@ for b0 in touched:
     struct.pack_into('<I', raw, b0 + 8, zlib.adler32(bytes(raw[b0 + 12:b0 + fs])) & 0xffffffff)
 zout = zipfile.ZipFile(dst, 'w')
 for i in zin.infolist():
-    data = bytes(raw) if i.filename == 'classes.dex' else zin.read(i.filename)
+    data = bytes(raw[starts[DEXN.index(i.filename)]:starts[DEXN.index(i.filename)] + len(parts[DEXN.index(i.filename)])]) if i.filename in DEXN else zin.read(i.filename)
     zi = zipfile.ZipInfo(i.filename, i.date_time); zi.compress_type = i.compress_type; zi.external_attr = i.external_attr
     zout.writestr(zi, data)
 zout.close(); print('patched dex at', hex(base), 'catch type', cur, '->', npe, '; wrote', dst)

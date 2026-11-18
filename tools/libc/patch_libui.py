@@ -9,13 +9,18 @@ if d[4] == 2:
     for i in range(0, len(d) - 8, 4):
         if struct.unpack_from('<I', d, i)[0] == 0x71008c1f and (struct.unpack_from('<I', d, i + 4)[0] & 0xff00001f) == 0x5400000c:  # cmp w0,#0x23 ; b.gt
             hits.append(i + 4)
+    # each check sits right after `bl android_get_device_api_level`; every hit must follow a bl to the same stub. Device builds that inline
+    # the mapper lookup (Lenovo ZUI 18.5: also in GraphicBuffer's constructor) have a third copy of the same check.
+    bls = [struct.unpack_from('<I', d, h - 8)[0] for h in hits]
+    targets = {h - 8 + (((w & 0x3ffffff) ^ 0x2000000) - 0x2000000) * 4 for h, w in zip(hits, bls) if w >> 26 == 0x25}
+    assert len(targets) == 1 and all(w >> 26 == 0x25 for w in bls), ('api-level checks not all after one bl', [hex(h) for h in hits])
     for a in hits: struct.pack_into('<I', d, a, 0xd503201f)
 else:
     for i in range(0, len(d) - 4, 2):
         if d[i:i + 2] == b'\x23\x28' and d[i + 3] == 0xdc:   # cmp r0,#0x23 ; bgt <imm8>
             hits.append(i + 2)
     for a in hits: d[a:a + 2] = b'\x00\xbf'
-assert len(hits) == 2, hits
+assert len(hits) == 2 or (d[4] == 2 and len(hits) == 3), hits
 # Gralloc2 (HIDL mapper 2.x) rejects descriptors whose usage has bit 13 (0x2000, the legacy GRALLOC_USAGE_EXTERNAL_DISP) with "buffer descriptor contains invalid usage bits 0x2000".
 # The MediaTek OMX decoder asks for it, so ACodec's YV12 output buffers could not be allocated and YouTube showed a green screen / "problem while playing".
 # arm64 only (the 32-bit library is not used by the apps that decode video): in the two validate functions the invalid-bits mask is built with
